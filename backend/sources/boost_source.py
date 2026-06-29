@@ -34,10 +34,12 @@ def _classify(peak: int, cfg: DetectionConfig) -> int:
 def detect_pickups(readings: Iterable[Reading], cfg: DetectionConfig) -> list[Event]:
     """Turn a (t, value) series into BOOST_PICKUP events.
 
-    Robust to the three §6.1 hazards: continuous drain (the baseline tracks
-    downward), the multi-frame settle (a pickup is confirmed only once the peak
-    holds for `stable_frames`, collapsing the transient into a single event), and
-    read noise (the jump + stability thresholds reject jitter and lone spikes).
+    Handles the §6.1 hazards plus the overlay's animated counter: when a pad is
+    grabbed the number *ramps* up over several frames (0 -> 26 -> 63 -> ... -> 100),
+    so a whole climb-then-settle is collapsed into ONE event at its final peak. A
+    rise is finalized only when the peak settles (`stable_frames`) or the value
+    drops, and is emitted only if the peak persisted >= `min_confirm_frames`
+    (rejecting 1-frame spikes). Continuous drain tracks the baseline down.
     """
     valid = [r for r in readings if r.value is not None]
     if len(valid) < 2:
@@ -52,24 +54,24 @@ def detect_pickups(readings: Iterable[Reading], cfg: DetectionConfig) -> list[Ev
         if r.value >= baseline + cfg.jump_threshold:
             peak = r.value
             conf = r.confidence
-            hold = 1
+            peak_hold = 1
             j = i
             while j + 1 < n:
                 nxt = valid[j + 1]
-                if nxt.value >= peak + 1:                            # still climbing
+                if nxt.value >= peak + 1:                            # still climbing (animation)
                     j += 1
                     peak = nxt.value
                     conf = min(conf, nxt.confidence)
-                    hold = 1
-                elif abs(nxt.value - peak) <= cfg.stable_tolerance:  # holding at peak
+                    peak_hold = 1
+                elif nxt.value >= peak - cfg.stable_tolerance:       # holding near peak
                     j += 1
                     conf = min(conf, nxt.confidence)
-                    hold += 1
-                    if hold >= cfg.stable_frames:
+                    peak_hold += 1
+                    if peak_hold >= cfg.stable_frames:               # fully settled
                         break
-                else:                                                # dropped -> settled
+                else:                                                # dropped -> drain began
                     break
-            if hold >= cfg.stable_frames and (peak - baseline) >= cfg.jump_threshold:
+            if peak_hold >= cfg.min_confirm_frames and (peak - baseline) >= cfg.jump_threshold:
                 events.append(
                     Event(
                         type=EventType.BOOST_PICKUP,

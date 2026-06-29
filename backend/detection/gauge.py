@@ -23,16 +23,17 @@ class GaugeReading:
     confidence: float       # min kept-digit score (0.0 when unreadable)
 
 
-def load_templates(dir_path: str | Path) -> dict[int, np.ndarray]:
-    """Load digit templates `0.png`..`9.png` (grayscale) from a directory."""
-    out: dict[int, np.ndarray] = {}
-    base = Path(dir_path)
-    for digit in range(10):
-        p = base / f"{digit}.png"
-        if p.exists():
-            img = cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
-            if img is not None:
-                out[digit] = img
+def load_templates(dir_path: str | Path) -> dict[int, list[np.ndarray]]:
+    """Load digit exemplars from a directory. Each filename starts with the digit:
+    `<digit>.png` or `<digit>_<id>.png`. Returns {digit: [glyphs]} for 1-NN matching."""
+    out: dict[int, list[np.ndarray]] = {}
+    for p in Path(dir_path).glob("*.png"):
+        head = p.stem.split("_")[0]
+        if not head.isdigit() or not 0 <= int(head) <= 9:
+            continue
+        img = cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
+        if img is not None:
+            out.setdefault(int(head), []).append(img)
     return out
 
 
@@ -63,7 +64,7 @@ def digit_boxes(binary: np.ndarray, cfg: DetectionConfig) -> list[tuple[int, int
 
 
 def read_value(
-    frame: np.ndarray, templates: dict[int, np.ndarray], cfg: DetectionConfig
+    frame: np.ndarray, templates: dict[int, list[np.ndarray]], cfg: DetectionConfig
 ) -> GaugeReading:
     if not templates:
         return GaugeReading(None, 0.0)

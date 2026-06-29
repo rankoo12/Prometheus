@@ -51,7 +51,13 @@ def test_transient_intermediate_frame():
 
 
 def test_two_distinct_pickups():
-    assert _amounts(detect_pickups(_series([0, 12, 12, 24, 24]), CFG)) == [12, 12]
+    # two grabs separated by a sustained hold (not one animated ramp)
+    assert _amounts(detect_pickups(_series([0] + [12] * 6 + [24] * 6), CFG)) == [12, 12]
+
+
+def test_animated_ramp_is_one_pickup():
+    # the overlay ramps the number up over several frames -> one pickup at the peak
+    assert _amounts(detect_pickups(_series([0, 0, 26, 63, 74, 89, 97, 100] + [100] * 6), CFG)) == [100]
 
 
 def test_read_noise_no_false_positive():

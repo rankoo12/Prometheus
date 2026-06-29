@@ -50,6 +50,10 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   digit templates are tuned to that, not the spec's placeholder coords. Pipeline: crop →
   Otsu binary → segment (drop edge dial-arc, size/merged-digit filters) → per-digit
   template match → value series → median smooth + physical drop-rate despike → upward-jump
-  detection + settle debounce → +12/+100 by result. **Reader ~71% per-frame on real clips;
-  main open issue is 3↔6↔9 confusion in the segmented font.** Diagnostic tooling lives in
-  the session scratchpad. See spec §6.1.
+  detection + animation-aware debounce → +12/+100 by result. Digit recognition is
+  **multi-exemplar 1-NN** over a bank of real glyphs (`detection/templates/<digit>_*.png`)
+  on canonical grayscale fingerprints. The overlay *animates* the number up over several
+  frames, so a whole climb-then-settle is collapsed into one pickup at its peak. **Held-out
+  per-frame read ~79% (93% of read frames correct); event timelines clean (correct +12/+100,
+  no bursts).** Expand the bank with more labeled clips to push higher. Diagnostic tooling is
+  in the session scratchpad. See spec §6.1.

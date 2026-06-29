@@ -13,14 +13,14 @@ class DigitMatch:
     score: float        # normalized-correlation peak, in [-1.0, 1.0]
 
 
-def match_digit(cell: np.ndarray, templates: dict[int, np.ndarray]) -> DigitMatch:
-    """Best-matching digit for a single digit-cell image, via normalized
-    cross-correlation against each 0-9 template."""
+def match_digit(cell: np.ndarray, templates: dict[int, list[np.ndarray]]) -> DigitMatch:
+    """Best-matching digit for a single cell via 1-NN over all exemplars of each digit."""
     best = DigitMatch(-1, -1.0)
-    for digit, template in templates.items():
-        score = _score(cell, template)
-        if score > best.score:
-            best = DigitMatch(digit, score)
+    for digit, exemplars in templates.items():
+        for tpl in exemplars:
+            score = _score(cell, tpl)
+            if score > best.score:
+                best = DigitMatch(digit, score)
     return best
 
 

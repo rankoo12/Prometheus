@@ -34,7 +34,8 @@ class DetectionConfig:
     max_digit_width: int = 60            # a wider box = merged digits (blur) -> unreliable frame
     max_drain_per_second: float = 60.0   # plausible boost drain rate; faster drops = misreads
     jump_threshold: int = 8              # min rise (boost units) to treat as a pickup
-    stable_frames: int = 2               # readings the peak must hold to confirm a settle
+    stable_frames: int = 5               # frames stable at peak to declare it settled (cooldown)
+    min_confirm_frames: int = 2          # peak must persist >= this to count (rejects 1-frame spikes)
     stable_tolerance: int = 2            # +/- units still counted as "the same" value
     full_value: int = 100                # a big pad fills to this
     full_read_tolerance: int = 1         # treat >= full_value - this as "full" (read noise)
