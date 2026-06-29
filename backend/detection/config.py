@@ -25,7 +25,7 @@ class GaugeRegion:
 @dataclass(frozen=True)
 class DetectionConfig:
     gauge: GaugeRegion = field(default_factory=GaugeRegion)
-    sample_every_n_frames: int = 1       # 1 = every frame
+    sample_every_n_frames: int = 2       # process every Nth frame (2 = 30fps; ample for boost)
     match_threshold: float = 0.55        # min normalized-correlation to accept a digit
     min_digit_height_frac: float = 0.45  # contour height (frac of crop) to count as a digit
     min_digit_width: int = 8             # ...min width (px), to drop dial-arc ticks

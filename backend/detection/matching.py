@@ -14,28 +14,31 @@ class DigitMatch:
 
 
 def match_digit(cell: np.ndarray, templates: dict[int, list[np.ndarray]]) -> DigitMatch:
-    """Best-matching digit for a single cell via 1-NN over all exemplars of each digit."""
+    """1-NN over prepared exemplar fingerprints. `templates` values must already be
+    prepared (load_templates does this); the cell is prepared once here."""
+    cell_fp = prepare(cell)
     best = DigitMatch(-1, -1.0)
     for digit, exemplars in templates.items():
-        for tpl in exemplars:
-            score = _score(cell, tpl)
+        for tpl_fp in exemplars:
+            score = _score(cell_fp, tpl_fp)
             if score > best.score:
                 best = DigitMatch(digit, score)
     return best
 
 
-_CANON = (16, 24)  # canonical (w, h): both glyphs shrink to a low-res fingerprint
+_CANON = (16, 24)  # canonical (w, h): glyphs shrink to a low-res fingerprint
 
 
-def _score(cell: np.ndarray, template: np.ndarray) -> float:
-    """Normalized correlation of canonical-size grayscale fingerprints.
+def prepare(glyph: np.ndarray) -> np.ndarray:
+    """Canonical-size float fingerprint of a binary glyph. Templates are prepared ONCE
+    at load (load_templates); only the cell is prepared per match. Shrinking to a small
+    fixed size (INTER_AREA) tolerates stroke thickness and slight misalignment."""
+    return cv2.resize(glyph, _CANON, interpolation=cv2.INTER_AREA).astype(np.float32)
 
-    Resizing both to a small fixed size (INTER_AREA) makes the score tolerant of
-    stroke thickness and slight misalignment. The variance guard returns 0 for an
-    empty cell or template, so a blank glyph can never match everything.
-    """
-    c = cv2.resize(cell, _CANON, interpolation=cv2.INTER_AREA).astype(np.float32)
-    t = cv2.resize(template, _CANON, interpolation=cv2.INTER_AREA).astype(np.float32)
-    if c.std() < 1e-3 or t.std() < 1e-3:
+
+def _score(cell_fp: np.ndarray, tpl_fp: np.ndarray) -> float:
+    """Normalized correlation of two prepared fingerprints. The variance guard returns
+    0 for an empty cell/template, so a blank glyph can never match everything."""
+    if cell_fp.std() < 1e-3 or tpl_fp.std() < 1e-3:
         return 0.0
-    return float(cv2.matchTemplate(c, t, cv2.TM_CCOEFF_NORMED)[0, 0])
+    return float(cv2.matchTemplate(cell_fp, tpl_fp, cv2.TM_CCOEFF_NORMED)[0, 0])

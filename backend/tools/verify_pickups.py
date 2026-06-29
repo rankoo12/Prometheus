@@ -33,35 +33,28 @@ def main() -> None:
 
     cfg = DetectionConfig()
     templates = load_templates(args.templates_dir)
-    events = BoostSource(args.clip, templates, cfg).detect()
+    print("detecting pickups (reading clip)...", flush=True)
+    events = BoostSource(args.clip, templates, cfg, verbose=True).detect()
     if not events:
         print("no pickups detected")
         return
 
+    # Grab only the few frames each event needs (seek, not a full re-decode).
     cap = cv2.VideoCapture(args.clip)
     fps = cap.get(cv2.CAP_PROP_FPS) or 60.0
-
-    # Map each needed frame index -> the (event, column) slots it fills.
-    targets: dict[int, list[tuple[int, int]]] = {}
+    g = cfg.gauge
+    cells: dict[tuple[int, int], np.ndarray] = {}
     for ei, e in enumerate(events):
         for oi, off in enumerate(OFFSETS):
             fidx = max(0, int(round((e.t_start + off) * fps)))
-            targets.setdefault(fidx, []).append((ei, oi))
-
-    g = cfg.gauge
-    cells: dict[tuple[int, int], np.ndarray] = {}
-    fi, last = 0, max(targets)
-    while fi <= last:
-        ok, fr = cap.read()
-        if not ok:
-            break
-        if fi in targets:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, fidx)
+            ok, fr = cap.read()
+            if not ok:
+                continue
             crop = crop_gauge(fr, cfg).copy()
             val = read_value(fr, templates, cfg).value
             cv2.putText(crop, str(val), (2, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            for slot in targets[fi]:
-                cells[slot] = crop
-        fi += 1
+            cells[(ei, oi)] = crop
     cap.release()
 
     label_w = 150
