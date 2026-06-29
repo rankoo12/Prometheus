@@ -18,6 +18,16 @@ function createWindow(): void {
       sandbox: false,
     },
   });
+
+  // Surface renderer console output + load failures on the main-process stderr,
+  // so renderer-side errors aren't invisible.
+  (win.webContents as any).on("console-message", (...args: any[]) => {
+    process.stderr.write(`[renderer] ${args.slice(1).map((a) => String(a)).join(" ")}\n`);
+  });
+  win.webContents.on("did-fail-load", (_e, code, desc) => {
+    process.stderr.write(`[renderer] did-fail-load ${code} ${desc}\n`);
+  });
+
   win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
 }
 
