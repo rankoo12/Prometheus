@@ -24,11 +24,18 @@ def match_digit(cell: np.ndarray, templates: dict[int, np.ndarray]) -> DigitMatc
     return best
 
 
+_CANON = (16, 24)  # canonical (w, h): both glyphs shrink to a low-res fingerprint
+
+
 def _score(cell: np.ndarray, template: np.ndarray) -> float:
-    """TM_CCOEFF_NORMED with the template resized to the cell (scale-tolerant)."""
-    ch, cw = cell.shape[:2]
-    th, tw = template.shape[:2]
-    if (th, tw) != (ch, cw):
-        template = cv2.resize(template, (cw, ch), interpolation=cv2.INTER_AREA)
-    result = cv2.matchTemplate(cell, template, cv2.TM_CCOEFF_NORMED)
-    return float(result.max())
+    """Normalized correlation of canonical-size grayscale fingerprints.
+
+    Resizing both to a small fixed size (INTER_AREA) makes the score tolerant of
+    stroke thickness and slight misalignment. The variance guard returns 0 for an
+    empty cell or template, so a blank glyph can never match everything.
+    """
+    c = cv2.resize(cell, _CANON, interpolation=cv2.INTER_AREA).astype(np.float32)
+    t = cv2.resize(template, _CANON, interpolation=cv2.INTER_AREA).astype(np.float32)
+    if c.std() < 1e-3 or t.std() < 1e-3:
+        return 0.0
+    return float(cv2.matchTemplate(c, t, cv2.TM_CCOEFF_NORMED)[0, 0])

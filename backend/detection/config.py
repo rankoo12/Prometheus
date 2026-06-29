@@ -16,17 +16,23 @@ from typing import Any
 class GaugeRegion:
     """Crop of the on-screen boost number, in source pixels (top-left origin)."""
 
-    x: int = 20
-    y: int = 1330
-    w: int = 240
-    h: int = 240
+    x: int = 65
+    y: int = 1480
+    w: int = 160
+    h: int = 66
 
 
 @dataclass(frozen=True)
 class DetectionConfig:
     gauge: GaugeRegion = field(default_factory=GaugeRegion)
     sample_every_n_frames: int = 1       # 1 = every frame
-    match_threshold: float = 0.70        # min normalized-correlation to accept a digit
+    match_threshold: float = 0.55        # min normalized-correlation to accept a digit
+    min_digit_height_frac: float = 0.45  # contour height (frac of crop) to count as a digit
+    min_digit_width: int = 8             # ...min width (px), to drop dial-arc ticks
+    edge_margin: int = 3                 # drop contours touching crop edges (the dial arc)
+    smooth_window: int = 5               # median-filter window over the value series
+    max_digit_width: int = 60            # a wider box = merged digits (blur) -> unreliable frame
+    max_drain_per_second: float = 60.0   # plausible boost drain rate; faster drops = misreads
     jump_threshold: int = 8              # min rise (boost units) to treat as a pickup
     stable_frames: int = 2               # readings the peak must hold to confirm a settle
     stable_tolerance: int = 2            # +/- units still counted as "the same" value

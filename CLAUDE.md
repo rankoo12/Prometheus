@@ -45,4 +45,11 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
 
 ## Status
 - **Phase 0 — complete.** Shared contracts (`Event`, `EditInstruction`, `Profile`) + a `probe()` stdio round-trip, verified through the Electron UI on a real 1080×1920/60 clip.
-- **Phase 1 — boost detection (the go/no-go risk gate).** In progress. Template-match the bottom-left boost-gauge digits, detect upward jumps, debounce, classify +12/+100 **by result** (a big pad fills to 100). Needs real footage for digit-template extraction + tuning. See spec §6.1.
+- **Phase 1 — boost detection (the go/no-go risk gate).** In progress. The HUD is a
+  BakkesMod-style boost panel (bottom-left of the gameplay area), so the gauge region +
+  digit templates are tuned to that, not the spec's placeholder coords. Pipeline: crop →
+  Otsu binary → segment (drop edge dial-arc, size/merged-digit filters) → per-digit
+  template match → value series → median smooth + physical drop-rate despike → upward-jump
+  detection + settle debounce → +12/+100 by result. **Reader ~71% per-frame on real clips;
+  main open issue is 3↔6↔9 confusion in the segmented font.** Diagnostic tooling lives in
+  the session scratchpad. See spec §6.1.

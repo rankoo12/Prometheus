@@ -86,6 +86,36 @@ def detect_pickups(readings: Iterable[Reading], cfg: DetectionConfig) -> list[Ev
     return events
 
 
+def smooth_values(readings: Iterable[Reading], window: int) -> list[Reading]:
+    """Median-filter the value series to kill transient single-frame misreads
+    (motion blur). Unreadable (None) frames are dropped first; timestamps survive."""
+    valid = [r for r in readings if r.value is not None]
+    if window <= 1 or len(valid) < window:
+        return valid
+    vals = [r.value for r in valid]
+    k = window // 2
+    out: list[Reading] = []
+    for i, r in enumerate(valid):
+        win = sorted(vals[max(0, i - k) : i + k + 1])
+        out.append(Reading(r.t, win[len(win) // 2], r.confidence))
+    return out
+
+
+def drop_despike(readings: Iterable[Reading], max_drain_per_second: float) -> list[Reading]:
+    """Drop readings that fall faster than boost physically can. Boost only *decreases*
+    by draining, at a bounded rate; a downward jump beyond that is a misread (e.g. 66
+    momentarily read as 6 under motion blur). Removing them stops a transient dropout
+    from looking like a real drop followed by a pickup on recovery."""
+    out: list[Reading] = []
+    for r in readings:
+        if out:
+            dt = r.t - out[-1].t
+            if r.value < out[-1].value - max(max_drain_per_second * dt, 1.0):
+                continue
+        out.append(r)
+    return out
+
+
 class BoostSource(Source):
     """Configured at construction; `detect()` reads the clip and emits events."""
 
@@ -100,7 +130,9 @@ class BoostSource(Source):
         self.cfg = cfg or DetectionConfig()
 
     def detect(self) -> list[Event]:
-        return detect_pickups(self._read_series(), self.cfg)
+        readings = smooth_values(list(self._read_series()), self.cfg.smooth_window)
+        readings = drop_despike(readings, self.cfg.max_drain_per_second)
+        return detect_pickups(readings, self.cfg)
 
     def _read_series(self) -> Iterator[Reading]:
         # Lazy cv2 import so the pure detect_pickups path needs no OpenCV.

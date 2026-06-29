@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from backend.detection.config import DetectionConfig
 from backend.models.event import EventType
-from backend.sources.boost_source import Reading, detect_pickups
+from backend.sources.boost_source import (
+    Reading,
+    detect_pickups,
+    drop_despike,
+    smooth_values,
+)
 
 CFG = DetectionConfig()
 
@@ -65,3 +70,19 @@ def test_unreadable_frames_ignored():
 def test_timestamp_is_rise_start():
     events = detect_pickups(_series([0, 0, 100, 100, 100]), CFG)
     assert abs(events[0].t_start - 2 / 60.0) < 1e-9  # rise first seen at index 2
+
+
+def test_smooth_values_removes_isolated_spike():
+    rs = smooth_values(_series([50, 50, 100, 50, 50, 50, 50]), 5)
+    assert all(r.value == 50 for r in rs)
+
+
+def test_despike_dropout_recovery_is_not_a_pickup():
+    # 66 momentarily misread as 6, then recovers — must not become a pickup
+    rs = drop_despike(_series([66] * 6 + [6] * 4 + [66] * 6), CFG.max_drain_per_second)
+    assert detect_pickups(rs, CFG) == []
+
+
+def test_despike_keeps_real_drain_then_pickup():
+    rs = drop_despike(_series([60, 59, 58, 57, 56, 55, 55, 67, 67, 67]), CFG.max_drain_per_second)
+    assert _amounts(detect_pickups(rs, CFG)) == [12]

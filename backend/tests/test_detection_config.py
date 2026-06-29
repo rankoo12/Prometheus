@@ -15,7 +15,7 @@ def test_from_dict_overrides_and_nested_gauge():
     cfg = DetectionConfig.from_dict({"jump_threshold": 15, "gauge": {"x": 30, "y": 1300}})
     assert cfg.jump_threshold == 15
     assert cfg.gauge.x == 30 and cfg.gauge.y == 1300
-    assert cfg.gauge.w == 240  # untouched default preserved
+    assert cfg.gauge.w == 160  # untouched default preserved
 
 
 def test_to_dict_roundtrip():
