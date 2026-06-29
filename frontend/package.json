@@ -1,0 +1,17 @@
+{
+  "name": "prometheus",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Electron shell for the Prometheus RL clip auto-editor",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "start": "npm run build && electron .",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "electron": "^42.5.1",
+    "typescript": "^6.0.3"
+  }
+}

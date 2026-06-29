@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Node / Electron
+node_modules/
+dist/
+out/
+
+# Local assets / scratch (generated test clips, logs)
+samples/
+*.log
+
+# Claude Code (local, per-user)
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

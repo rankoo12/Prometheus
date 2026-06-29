@@ -1,0 +1,429 @@
+# RL Clip Auto-Editor — Master SDD Specification (v1)
+
+**Project codename:** Prometheus
+**Author:** Ran (with Claude)
+**Status:** Draft v1 — build bible for implementation in Visual Studio
+**Last updated:** 2026-06-29
+
+---
+
+## 0. Purpose of this document
+
+This is the master Software Design Document (SDD) for an automated Rocket League clip editor. It is written to be carried into Visual Studio and used as the reference Claude (and you) build against. It defines scope, architecture, module boundaries, interfaces/contracts, the configuration model, and a risk-first phased roadmap.
+
+It follows two guiding rules throughout:
+- **SOLID** — especially Single Responsibility (each module does one thing) and Open/Closed (new event types and styles are added as data or new handlers, never by editing existing code).
+- **SDD** — design the seams and contracts before writing implementation, so the risky parts can be proven in isolation.
+
+---
+
+## 1. Product overview
+
+### 1.1 What it does
+
+The tool ingests raw Rocket League clips (full ~30s captures), lets the user trim them, automatically detects gameplay events from the video, overlays styled effects + sound effects keyed to those events, optionally adds karaoke-style captions and a music track, stamps a Twitch thumbnail/badge template, and exports a near-finished short. The user then takes the export into CapCut for final polish.
+
+**The tool's job is to kill the tedious detection-and-placement grind. CapCut remains the finishing room.**
+
+### 1.2 What it explicitly does NOT do
+
+- It does **not** replace CapCut. Final creative polish stays manual.
+- It does **not** detect ball touches, assists, or demos. These have no reliable on-screen indicator in gameplay footage; detecting them from pixels alone is research-grade and unreliable. **Scope is limited to boost pickups and goals**, which are reliably detectable.
+- It does **not** parse replay files. (Considered and rejected — see §1.3.)
+- It does **not** pick or license music. It can fetch audio the user points it at; sourcing/licensing is the user's responsibility.
+
+### 1.3 Key rejected decision: replays
+
+Replay parsing (carball/rattletrap) would yield perfect event data for every event type. It was rejected because it requires saving and syncing `.replay` files to each clip, which complicates the capture workflow the user wants to keep simple. **Consequence:** detection is video-based, which constrains scope to boost + goals. This is an accepted trade.
+
+> **Architectural note:** Because the design isolates event *sources* behind an interface (§3), replay parsing can be added later as an alternative source without touching handlers or rendering. The door is left open even though it's not built.
+
+---
+
+## 2. Scope (v1)
+
+| Capability | In v1 | Notes |
+|---|---|---|
+| Import full clips | ✅ | ~30s captures, 1080×1920/60fps |
+| In-app trim (in/out points) | ✅ | Per clip, before processing |
+| Boost pickup detection | ✅ | Video CV — the risky core |
+| Goal detection | ✅ | Video CV — easier than boost |
+| Boost "+12/+100" text + pop animation | ✅ | ASS overlay, configurable |
+| Boost SFX | ✅ | Event→SFX mapping |
+| Goal effects + SFX | ✅ | Event→SFX mapping |
+| Karaoke captions (EN) | ✅ | Whisper word-timing + ASS |
+| Twitch thumbnail/badge template | ✅ | Static overlay from profile |
+| Attach music track | ✅ | User-supplied or fetched file |
+| Music fetch (yt-dlp) | ✅ (neutral) | User responsible for sourcing/licensing |
+| Export for CapCut | ✅ | Full 1080×1920/60fps |
+| Settings UI (profile editor) | ✅ | Colors, placement, SFX map, caption style, animation |
+| Ball touch / assist / demo detection | ❌ | No reliable video signal |
+| Replay parsing | ❌ | Workflow cost; door left open |
+| Auto song selection / trend detection | ❌ | Manual, by design |
+
+---
+
+## 3. Architecture
+
+### 3.1 The core seam
+
+The entire design rests on one principle: **separate detecting events from acting on events from rendering.** These three stages never bleed into each other.
+
+```
+                 ┌──────────────┐
+  clips ───────► │   SOURCES    │ ──► Event[]  (timestamp, type, metadata)
+  audio ───────► │              │
+                 └──────────────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+  profile ─────► │   HANDLERS   │ ──► EditInstruction[]  (overlays, SFX cues, caption spans)
+                 │ (one/event)  │
+                 └──────────────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+  clips ───────► │   RENDERER   │ ──► final .mp4
+  music ───────► │  (FFmpeg)    │
+  profile ─────► │              │
+                 └──────────────┘
+```
+
+- **Sources** produce a stream of `Event` objects. A source knows nothing about overlays or SFX. Implementations: `BoostSource` (video CV), `GoalSource` (video CV), `CaptionSource` (Whisper word-timing). Future: `ReplaySource`.
+- **Handlers** consume `Event`s and emit `EditInstruction`s. One handler per event type. A handler knows nothing about *how* events were detected or *how* instructions are rendered. It reads the profile for styling.
+- **Renderer** consumes all `EditInstruction`s + the trimmed clips + music + profile, and produces the final FFmpeg command(s). It knows nothing about detection.
+
+**Why this matters:** you can swap video detection for replay parsing (new Source), add a new event type (new Source + new Handler), or change the look of any effect (profile data) — each without touching the other two stages. This is the SOLID payoff and it must hold from day one.
+
+### 3.2 Process topology
+
+```
+┌─────────────────────────┐         ┌──────────────────────────┐
+│   Electron (TypeScript)  │  local  │   Python backend         │
+│   - Trim UI              │ ◄─────► │   - Sources (CV/Whisper) │
+│   - Settings/profile UI  │  IPC/   │   - Handlers             │
+│   - Event review UI      │  API    │   - Renderer (FFmpeg)    │
+│   - Render trigger       │         │   - Music fetch (yt-dlp) │
+└─────────────────────────┘         └──────────────────────────┘
+```
+
+- **Frontend:** Electron + TypeScript. Owns all UI: trimming, settings, reviewing detected events before render.
+- **Backend:** Python. Owns all heavy work: CV detection, Whisper, FFmpeg rendering, music fetch.
+- **Contract:** the **Profile** (JSON) + a small command/result API. See §5.
+
+### 3.3 Language rationale (recorded)
+
+This is a computer-vision project wearing a video-editor costume. The risky core (boost gauge reading, goal detection, template matching) is overwhelmingly Python territory — OpenCV, Whisper, yt-dlp, ffmpeg bindings are all first-class there and thin/lagging in C#. Electron makes the UI language-independent, so the backend is free to be Python. TypeScript frontend is already in the user's wheelhouse. **Accepted cost:** Python+Electron packaging is fiddlier (PyInstaller the backend, bundle alongside Electron). For a personal-use tool this cost is near zero; it only bites if distributed to other streamers.
+
+---
+
+## 4. Core data models
+
+These are the contracts that flow between stages. Define them once, share them.
+
+### 4.1 Event
+
+```python
+# Produced by Sources, consumed by Handlers
+@dataclass
+class Event:
+    type: EventType            # BOOST_PICKUP | GOAL | CAPTION_WORD
+    t_start: float             # seconds, relative to trimmed clip
+    t_end: float | None        # for spans (captions); None for instants
+    metadata: dict             # event-specific payload
+```
+
+Event-specific `metadata`:
+- `BOOST_PICKUP`: `{ "amount": 12 | 100, "confidence": float }`
+- `GOAL`: `{ "confidence": float }`
+- `CAPTION_WORD`: `{ "word": str }`
+
+### 4.2 EditInstruction
+
+```python
+# Produced by Handlers, consumed by Renderer
+@dataclass
+class EditInstruction:
+    kind: InstructionKind      # ASS_OVERLAY | SFX_CUE | MUSIC_BED | STATIC_OVERLAY
+    t_start: float
+    t_end: float | None
+    payload: dict              # e.g. ASS fragment, SFX file path + gain, image path
+```
+
+### 4.3 Profile (the UI↔backend contract)
+
+The Profile is a JSON document edited by the Electron settings UI and consumed by the Python backend. **All stylistic choices live here, never in code.**
+
+```jsonc
+{
+  "version": 1,
+  "output": { "width": 1080, "height": 1920, "fps": 60, "crf": 19 },
+
+  "boost": {
+    "enabled": true,
+    "text": {
+      "font_file": "fonts/CapCutStyle.ttf",   // swappable; placeholder default
+      "small_label": "+12",
+      "big_label": "+100",
+      "color": "#33CCFF",
+      "outline_color": "#000000",
+      "outline_width": 4,
+      "position": { "anchor": "near_gauge", "x_offset": 0, "y_offset": -40 }
+    },
+    "animation": {
+      "pop_duration_ms": 150,
+      "start_scale": 0.7,
+      "overshoot_scale": 1.1,
+      "settle_scale": 1.0,
+      "fade_in_ms": 60,
+      "hold_ms": 400,
+      "fade_out_ms": 200
+    },
+    "sfx": { "small": "sfx/boost_small.wav", "big": "sfx/boost_big.wav", "gain_db": 0 }
+  },
+
+  "goal": {
+    "enabled": true,
+    "effect": "slowmo",                        // or "flash" | "none"
+    "sfx": { "file": "sfx/goal.wav", "gain_db": 0 }
+  },
+
+  "captions": {
+    "enabled": true,
+    "language": "en",
+    "words_per_chunk": 4,
+    "font_file": "fonts/CapCutStyle.ttf",
+    "base_color": "#FFFFFF",
+    "active_color": "#FFD400",
+    "outline_color": "#000000",
+    "outline_width": 4,
+    "position": { "anchor": "lower_third", "y_offset": 0 },
+    "animation": { "pop_in": true, "pop_duration_ms": 120 }
+  },
+
+  "thumbnail": {
+    "enabled": true,
+    "image_file": "templates/twitch_badge.png",
+    "position": { "anchor": "top_left", "x": 24, "y": 24 }
+  },
+
+  "music": {
+    "enabled": true,
+    "file": null,                              // user-supplied or fetched
+    "gain_db": -8,
+    "duck_under_voice": true
+  },
+
+  "audio": { "normalize_lufs": -14, "true_peak_db": -1.0 }
+}
+```
+
+> **Design rule:** if a stylistic question ever tempts you to hardcode a value, it belongs in the Profile instead. The UI exposes Profile fields; the backend reads them. Adding a setting = adding a field, never editing logic.
+
+---
+
+## 5. Electron ↔ Python contract
+
+Keep it minimal. Two concerns: editing the profile, and running jobs.
+
+### 5.1 Transport
+
+Local only. Either:
+- **stdio JSON-RPC** (Python launched as child process of Electron), or
+- **localhost HTTP** (FastAPI on a fixed port).
+
+Recommendation: **stdio child process** for a personal tool — no port management, no auth, clean lifecycle. (FastAPI is a reasonable alternative if you later want the backend independently testable via HTTP — it also matches your Kaizen stack.)
+
+### 5.2 Commands (frontend → backend)
+
+```
+detect(clip_path, trim_in, trim_out, profile) -> Event[]      # returns detected events for review
+render(clip_jobs[], profile) -> { output_path }               # full render
+fetch_music(url) -> { file_path }                              # yt-dlp
+probe(clip_path) -> { duration, width, height, fps }           # for trim UI
+```
+
+Where a `clip_job` = `{ clip_path, trim_in, trim_out, approved_events[] }`.
+
+### 5.3 Events for review (the key UX seam)
+
+`detect()` returns the event list **for the user to review before render.** The UI shows detected boost pops / goals on a timeline; the user can delete false positives or nudge timing. The *approved* event list is what `render()` consumes. This human-in-the-loop step is what makes ~85% detection accuracy acceptable instead of frustrating.
+
+---
+
+## 6. Detection design (the risky core)
+
+### 6.1 Boost pickup detection
+
+**Signal:** the boost gauge number in the bottom-left. (Confirmed in footage: digits sit on a dark semi-transparent rounded panel — a controlled background, which makes this tractable.)
+
+**Method:** template matching, not general OCR.
+1. One-time: extract clean reference templates for digits 0–9 from the user's own footage (consistent stylized blue font).
+2. Per frame: crop the gauge region (≈ x=20, y=1330, 240×240 — tighten to digit area once templates exist), match digits, read the value.
+3. Detect pickups as **upward jumps** above a threshold between consecutive reads.
+4. Classify: small jump → `+12`; jump toward full → `+100`.
+
+**Known hazards (must handle):**
+- Boost **drains continuously** while driving — the number constantly drifts down. Only upward jumps count.
+- A single pickup registers across 2–3 frames as the value settles → **debounce** so one pickup = one event, not three.
+- Motion blur and the semi-transparent panel → matching needs threshold tolerance.
+- Similar digit shapes in the stylized font (3 vs 5) → clean per-digit templates required.
+
+**Accuracy expectation:** ~85% before tuning. The review step (§5.3) absorbs the rest. **This is Phase 1 and must be proven before anything else is built.**
+
+### 6.2 Goal detection
+
+**Signal:** Rocket League's full-screen goal transition + scoreboard increment. Large, unambiguous — easier than boost.
+
+**Method (either or combined):**
+- Detect the score number changing (template-match the small scoreboard digits, watch for increment), and/or
+- Detect the goal-explosion/replay transition (large-scale scene change — histogram or frame-difference spike).
+
+**Accuracy expectation:** high. Low risk relative to boost.
+
+### 6.3 Caption word-timing
+
+**Method:** Whisper with word-level timestamps (`whisper-timestamped` or `faster-whisper`). English. Produces per-word `(word, t_start, t_end)`. This is the `CaptionSource`. Reliable; main cost is the model download + compute (GPU fast, CPU slower).
+
+---
+
+## 7. Effects design
+
+### 7.1 Boost text + pop (ASS)
+
+Each approved boost event → an ASS overlay fragment via the `BoostHandler`:
+- Text = profile label (`+12` / `+100`), font/color/outline/position from profile.
+- **Pop animation** via ASS `\t` transform tags: scale `start_scale` → `overshoot_scale` → `settle_scale` over `pop_duration_ms`, plus fade-in/hold/fade-out. The overshoot-then-settle fakes a bounce.
+- **Limitation (recorded):** ASS interpolation is linear — no true spring physics. For a sub-second number this is imperceptible. Per-frame rendering (PIL) is the escape hatch if ever needed, but is out of scope for v1 as a poor trade.
+
+### 7.2 Goal effects
+
+`GoalHandler` emits the configured effect (slowmo segment / flash) + goal SFX cue, per profile.
+
+### 7.3 Captions (ASS karaoke)
+
+`CaptionHandler` consumes `CAPTION_WORD` events, groups into chunks of `words_per_chunk`, emits an ASS file where each word's color flips from `base_color` to `active_color` at its spoken timestamp (karaoke highlight), with optional pop-in. Burned in by the renderer in the same FFmpeg pass.
+
+### 7.4 SFX & music
+
+- SFX: each event kind maps to a file via the profile mapping table. `SfxHandler` emits `SFX_CUE` instructions (file + gain + timestamp).
+- Music: `MUSIC_BED` instruction; optional ducking under voice. Audio normalized to profile LUFS/true-peak at the end.
+
+### 7.5 Thumbnail/badge
+
+Static `STATIC_OVERLAY` from profile image at fixed anchor — same recipe every render.
+
+---
+
+## 8. Rendering
+
+Single deterministic FFmpeg pipeline assembled from the `EditInstruction[]`:
+1. Concatenate trimmed clips (in order).
+2. Burn ASS overlays (boost text + captions) — one subtitles pass.
+3. Composite static overlays (thumbnail/badge).
+4. Apply goal effects (slowmo segments if any).
+5. Mix audio: original + SFX cues + music bed (with ducking).
+6. Normalize loudness (LUFS / true-peak from profile).
+7. Encode 1080×1920/60fps, CRF from profile, `+faststart`.
+
+**Quality rule:** never downscale. Preserve source 1080p/60fps end to end. (The user's current CapCut export downgrades to 720p/30fps — the tool must not.)
+
+---
+
+## 9. Module layout (Python backend)
+
+```
+backend/
+  models/            # Event, EditInstruction, Profile (shared contracts)
+  sources/
+    base.py          # Source interface
+    boost_source.py  # video CV — Phase 1
+    goal_source.py   # video CV — Phase 3
+    caption_source.py# Whisper — Phase 4
+  handlers/
+    base.py          # Handler interface
+    boost_handler.py
+    goal_handler.py
+    caption_handler.py
+    sfx_handler.py
+  render/
+    renderer.py      # assembles & runs FFmpeg
+    ass_builder.py   # ASS fragment generation (text pop, karaoke)
+  music/
+    fetch.py         # yt-dlp wrapper
+  api/
+    rpc.py           # stdio JSON-RPC entrypoint
+  detection/
+    templates/       # extracted digit templates
+    matching.py      # template-matching utilities
+```
+
+Interfaces (`sources/base.py`, `handlers/base.py`) are the Open/Closed boundary: new event types = new files here, never edits to existing ones.
+
+---
+
+## 10. Risk-first phased roadmap
+
+Ordering is deliberate: **the project's real risk is boost detection, so it goes first.** If it can't hit acceptable accuracy on real clips, you learn that in week one — not after building a UI around it.
+
+### Phase 0 — Skeleton
+- Repo structure, Python venv, Electron app shell.
+- Define shared models (`Event`, `EditInstruction`, `Profile`).
+- Establish the stdio JSON-RPC contract with a `probe()` round-trip.
+- **Exit:** Electron can call Python and get a clip's duration back.
+
+### Phase 1 — Boost detection (THE RISK)
+- Extract digit templates from real footage.
+- Implement `BoostSource`: per-frame gauge read, upward-jump detection, debounce, +12/+100 classification.
+- CLI/test harness that prints the event timeline for a clip.
+- Tune against the user's real clips.
+- **Exit:** boost event timeline is accurate enough (~85%+) on real footage. **Go/no-go gate for the whole project.**
+
+### Phase 2 — Boost overlays + SFX
+- `BoostHandler` → ASS text with pop animation (from profile).
+- `SfxHandler` + renderer audio mix for boost SFX.
+- First end-to-end render: clip in → boost pops + sounds → mp4 out.
+- **Exit:** a clip renders with correctly-placed, animated +12/+100 and sounds.
+
+### Phase 3 — Goal detection + effects
+- `GoalSource` (score increment and/or transition detection).
+- `GoalHandler` (effect + SFX).
+- **Exit:** goals detected and decorated end to end.
+
+### Phase 4 — Captions
+- `CaptionSource` (Whisper word-timing).
+- `CaptionHandler` + `ass_builder` karaoke highlight + pop-in.
+- **Exit:** burned-in karaoke captions matching profile style.
+
+### Phase 5 — Trim, music, thumbnail, export
+- In-app trim (probe + in/out points → trimmed input to pipeline).
+- Music attach + fetch (yt-dlp) + ducking + normalization.
+- Thumbnail/badge static overlay.
+- **Exit:** full pipeline from raw clips → CapCut-ready export.
+
+### Phase 6 — Settings UI + event review + packaging
+- Electron profile editor (all §4.3 fields: colors, placement, SFX map, caption style, animation).
+- Event-review timeline (delete false positives / nudge timing before render).
+- Package (PyInstaller backend + Electron bundle) — only if distributing beyond personal use.
+- **Exit:** shippable personal tool.
+
+---
+
+## 11. Open questions / deferred
+
+- **Caption font:** unknown name. Spec uses a swappable `font_file` with a CapCut-style placeholder default (heavy weight + thick outline). Swap the `.ttf` later; no code change.
+- **Goal detection method:** score-increment vs transition-detection vs both — decide empirically in Phase 3 against real footage.
+- **Trim UX fidelity:** frame-accurate scrubber vs simple in/out fields — decide when building Phase 5.
+- **Music licensing:** fetch is neutral; user is responsible for using royalty-free/licensed audio to avoid YouTube claims.
+- **Packaging:** only required if shared with other streamers; skip for personal use.
+
+---
+
+## 12. Guiding principles (keep visible during build)
+
+1. **Three stages never bleed:** Sources detect, Handlers decide, Renderer renders.
+2. **Style is data, not code:** every stylistic value lives in the Profile.
+3. **Prove the risk first:** boost detection is the go/no-go gate.
+4. **Human-in-the-loop absorbs imperfection:** review detected events before render.
+5. **Never downscale:** preserve 1080p/60fps end to end.
+6. **CapCut is the finishing room:** the tool does the grind, not the final art.

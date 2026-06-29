@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prometheus.local/contracts/profile.schema.json",
+  "title": "Prometheus Profile",
+  "description": "UI<->backend styling contract (spec §4.3). All stylistic values live here, never in code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "output", "boost", "goal", "captions", "thumbnail", "music", "audio"],
+  "$defs": {
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{6})$",
+      "description": "RRGGBB hex color, e.g. #33CCFF"
+    },
+    "gainDb": { "type": "number", "description": "Gain in decibels" }
+  },
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "fps", "crf"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "integer", "minimum": 1 },
+        "crf": { "type": "integer", "minimum": 0, "maximum": 51 }
+      }
+    },
+
+    "boost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "text", "animation", "sfx"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["font_file", "small_label", "big_label", "color", "outline_color", "outline_width", "position"],
+          "properties": {
+            "font_file": { "type": "string" },
+            "small_label": { "type": "string" },
+            "big_label": { "type": "string" },
+            "color": { "$ref": "#/$defs/hexColor" },
+            "outline_color": { "$ref": "#/$defs/hexColor" },
+            "outline_width": { "type": "number", "minimum": 0 },
+            "position": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["anchor", "x_offset", "y_offset"],
+              "properties": {
+                "anchor": { "type": "string" },
+                "x_offset": { "type": "number" },
+                "y_offset": { "type": "number" }
+              }
+            }
+          }
+        },
+        "animation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pop_duration_ms", "start_scale", "overshoot_scale", "settle_scale", "fade_in_ms", "hold_ms", "fade_out_ms"],
+          "properties": {
+            "pop_duration_ms": { "type": "number", "minimum": 0 },
+            "start_scale": { "type": "number", "minimum": 0 },
+            "overshoot_scale": { "type": "number", "minimum": 0 },
+            "settle_scale": { "type": "number", "minimum": 0 },
+            "fade_in_ms": { "type": "number", "minimum": 0 },
+            "hold_ms": { "type": "number", "minimum": 0 },
+            "fade_out_ms": { "type": "number", "minimum": 0 }
+          }
+        },
+        "sfx": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["small", "big", "gain_db"],
+          "properties": {
+            "small": { "type": "string" },
+            "big": { "type": "string" },
+            "gain_db": { "$ref": "#/$defs/gainDb" }
+          }
+        }
+      }
+    },
+
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "effect", "sfx"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "effect": { "type": "string", "enum": ["slowmo", "flash", "none"] },
+        "sfx": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "gain_db"],
+          "properties": {
+            "file": { "type": "string" },
+            "gain_db": { "$ref": "#/$defs/gainDb" }
+          }
+        }
+      }
+    },
+
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "language", "words_per_chunk", "font_file", "base_color", "active_color", "outline_color", "outline_width", "position", "animation"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "language": { "type": "string" },
+        "words_per_chunk": { "type": "integer", "minimum": 1 },
+        "font_file": { "type": "string" },
+        "base_color": { "$ref": "#/$defs/hexColor" },
+        "active_color": { "$ref": "#/$defs/hexColor" },
+        "outline_color": { "$ref": "#/$defs/hexColor" },
+        "outline_width": { "type": "number", "minimum": 0 },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anchor", "y_offset"],
+          "properties": {
+            "anchor": { "type": "string" },
+            "y_offset": { "type": "number" }
+          }
+        },
+        "animation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pop_in", "pop_duration_ms"],
+          "properties": {
+            "pop_in": { "type": "boolean" },
+            "pop_duration_ms": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+
+    "thumbnail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "image_file", "position"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image_file": { "type": "string" },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anchor", "x", "y"],
+          "properties": {
+            "anchor": { "type": "string" },
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        }
+      }
+    },
+
+    "music": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "file", "gain_db", "duck_under_voice"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "file": { "type": ["string", "null"] },
+        "gain_db": { "$ref": "#/$defs/gainDb" },
+        "duck_under_voice": { "type": "boolean" }
+      }
+    },
+
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalize_lufs", "true_peak_db"],
+      "properties": {
+        "normalize_lufs": { "type": "number" },
+        "true_peak_db": { "type": "number" }
+      }
+    }
+  }
+}
