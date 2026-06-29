@@ -154,6 +154,8 @@ class EditInstruction:
 
 The Profile is a JSON document edited by the Electron settings UI and consumed by the Python backend. **All stylistic choices live here, never in code.**
 
+**Canonical artifact (decided in Phase 0):** the Profile lives in `contracts/` as `profile.default.json` (default values) validated against `profile.schema.json` (JSON Schema). The schema is the single cross-language source of truth — the Python backend validates against it and the TypeScript frontend derives its types from it, so the two cannot silently drift. It is modeled as a validated *document*, not a class: `Event` and `EditInstruction` are dataclasses (internal, Python-only), but the Profile stays data.
+
 ```jsonc
 {
   "version": 1,
@@ -234,6 +236,13 @@ Local only. Either:
 
 Recommendation: **stdio child process** for a personal tool — no port management, no auth, clean lifecycle. (FastAPI is a reasonable alternative if you later want the backend independently testable via HTTP — it also matches your Kaizen stack.)
 
+**Decided in Phase 0 — the wire format:**
+- **Envelope:** JSON-RPC 2.0 (`{jsonrpc, method, params, id}` → `{jsonrpc, result|error, id}`) — standard error objects and id-correlation for free.
+- **Framing:** newline-delimited JSON, one compact object per line, over stdin/stdout.
+- **stdout is reserved for RPC** — all backend logging goes to stderr, or the stream corrupts (the #1 stdio-RPC footgun).
+- **Dispatch is a command registry, not a switch:** new commands are *registered* (`REGISTRY["name"] = fn`), never branched in — the Open/Closed boundary for the API.
+- **ffprobe/ffmpeg** are an external runtime dependency, located via the `PROMETHEUS_FFPROBE` env override → `PATH` → a clear error. Never hardcoded.
+
 ### 5.2 Commands (frontend → backend)
 
 ```
@@ -261,13 +270,15 @@ Where a `clip_job` = `{ clip_path, trim_in, trim_out, approved_events[] }`.
 1. One-time: extract clean reference templates for digits 0–9 from the user's own footage (consistent stylized blue font).
 2. Per frame: crop the gauge region (≈ x=20, y=1330, 240×240 — tighten to digit area once templates exist), match digits, read the value.
 3. Detect pickups as **upward jumps** above a threshold between consecutive reads.
-4. Classify: small jump → `+12`; jump toward full → `+100`.
+4. Classify by **result, not just jump size**: a small pad adds exactly +12 (capped at 100); a big pad fills to **100**. So `result == 100` with a jump > 12 ⇒ big pad; a clean +12 jump ⇒ small pad (see the near-full ambiguity below).
 
 **Known hazards (must handle):**
 - Boost **drains continuously** while driving — the number constantly drifts down. Only upward jumps count.
 - A single pickup registers across 2–3 frames as the value settles → **debounce** so one pickup = one event, not three.
 - Motion blur and the semi-transparent panel → matching needs threshold tolerance.
 - Similar digit shapes in the stylized font (3 vs 5) → clean per-digit templates required.
+- **Big-pad-near-full ambiguity:** a big pad picked up at high boost (e.g. 88 → 100) looks like a +12-sized jump, so jump magnitude alone misclassifies it. Use the `result == 100` rule above; leave residual ambiguity to the review step (§5.3).
+- **Fixed-region assumption:** matching at fixed crop coordinates assumes the gauge's position, scale, and HUD layout are *constant across all clips* (same capture format — confirmed 1080×1920/60 in Phase 0). Verify against a spread of real clips before tuning; varying HUD position breaks the crop.
 
 **Accuracy expectation:** ~85% before tuning. The review step (§5.3) absorbs the rest. **This is Phase 1 and must be proven before anything else is built.**
 
@@ -330,7 +341,17 @@ Single deterministic FFmpeg pipeline assembled from the `EditInstruction[]`:
 
 ---
 
-## 9. Module layout (Python backend)
+## 9. Module layout
+
+Top-level (monorepo, as built in Phase 0):
+
+```
+contracts/   # cross-language Profile contract: profile.schema.json + profile.default.json
+backend/     # Python: models, sources, handlers, render, music, api, detection, tests
+frontend/    # Electron + TypeScript: main (+ python-bridge), preload, renderer, shared
+```
+
+The Python backend in detail:
 
 ```
 backend/
@@ -352,10 +373,13 @@ backend/
   music/
     fetch.py         # yt-dlp wrapper
   api/
-    rpc.py           # stdio JSON-RPC entrypoint
+    rpc.py           # stdio JSON-RPC loop
+    commands.py      # command registry (Open/Closed): probe(); later detect/render
+  probe.py           # ffprobe wrapper (Phase 0)
   detection/
     templates/       # extracted digit templates
     matching.py      # template-matching utilities
+  tests/             # pytest suite
 ```
 
 Interfaces (`sources/base.py`, `handlers/base.py`) are the Open/Closed boundary: new event types = new files here, never edits to existing ones.
@@ -371,6 +395,7 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - Define shared models (`Event`, `EditInstruction`, `Profile`).
 - Establish the stdio JSON-RPC contract with a `probe()` round-trip.
 - **Exit:** Electron can call Python and get a clip's duration back.
+- **Status: ✅ complete (2026-06-29)** — `probe()` verified end-to-end through the Electron UI on a real 1080×1920/60 clip.
 
 ### Phase 1 — Boost detection (THE RISK)
 - Extract digit templates from real footage.
