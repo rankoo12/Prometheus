@@ -27,8 +27,34 @@
 
   "goal": {
     "enabled": true,
-    "effect": "slowmo",
-    "sfx": { "file": "sfx/goal.wav", "gain_db": 0 }
+    "scope": "your_goals",
+    "flash": {
+      "enabled": true,
+      "color": "#FFFFFF",
+      "max_opacity": 0.85,
+      "fade_in_ms": 40,
+      "hold_ms": 50,
+      "fade_out_ms": 220
+    },
+    "text": {
+      "enabled": true,
+      "label": "GOAL!",
+      "font_file": "fonts/CapCutStyle.ttf",
+      "color": "#FFFFFF",
+      "outline_color": "#000000",
+      "outline_width": 6,
+      "size": 150,
+      "position": { "anchor": "center", "x_offset": 0, "y_offset": 0 }
+    },
+    "animation": {
+      "pop_duration_ms": 200,
+      "start_scale": 0.5,
+      "overshoot_scale": 1.18,
+      "settle_scale": 1.0,
+      "fade_in_ms": 60,
+      "hold_ms": 500,
+      "fade_out_ms": 250
+    }
   },
 
   "captions": {

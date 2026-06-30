@@ -82,3 +82,9 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   YOU/ASSIST/OPP markers). Detection method pivoted from the spec's scene-change idea to scoreboard
   reading (semantically stronger, no false fires on cuts/saves). See spec §6.2. Carry-forward: digit
   bank needs scores ≥5; multi-user name input is future work.
+  **Goal effect (flash slice — done):** `GoalHandler` → white **flash** (full-frame ASS box) +
+  **"GOAL!"** text pop, Profile-styled (`goal.scope=your_goals` → only the user's own goals fire
+  it; assists/opponent get nothing). `ass_builder` refactored to **per-event inline styling**
+  (boost/goal/captions each carry their own look; payload `type:"flash"` draws the box) — boost
+  output unchanged. Tool: `render_goal`. **`slowmo` is the next, separate slice** (retiming →
+  `RETIME_SEGMENT` + time-remap; isolated because it shifts every later timestamp). See spec §7.2.

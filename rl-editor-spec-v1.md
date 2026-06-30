@@ -324,7 +324,14 @@ Each approved boost event → an ASS overlay fragment via the `BoostHandler`:
 
 ### 7.2 Goal effects
 
-`GoalHandler` emits the configured effect (slowmo segment / flash) + goal SFX cue, per profile.
+`GoalHandler` → ASS_OVERLAY instructions for the goal celebration, styled from `profile.goal`:
+a white **flash** (full-frame box, fades in to `max_opacity` then out) plus a **"GOAL!" text
+pop** (centre-screen, same pop+fade as boost). `goal.scope` selects which goals fire it —
+**`your_goals`** (default: only `side=="your_team"` & `scorer=="you"`) or `all`. Both reuse the
+Phase-2 burn path: `ass_builder` (now per-event inline styling; a payload `type:"flash"` draws
+the box) → `Renderer`. No SFX (§7.4). **`slowmo` is a separate later slice** — it retimes a
+segment, shifting every later timestamp, so it needs a `RETIME_SEGMENT` instruction + a
+time-remap contract and is kept isolated on purpose.
 
 ### 7.3 Captions (ASS karaoke)
 
@@ -439,10 +446,13 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
   plan: **detection first, then a `flash`/`GOAL!` overlay effect, then `slowmo` as a deliberate
   second slice** (slowmo retimes a segment → shifts every later timestamp → needs `RETIME_SEGMENT`
   + a time-remap contract; isolated on purpose).
-- `GoalHandler` (overlay effect: flash / "GOAL!" text, reusing the Phase-2 burn path). **Next.**
-- **Exit:** goals detected and decorated end to end.
-- **Status: detection complete (2026-07-01), validated. Effect handler (flash) pending; slowmo
-  deferred to its own slice.**
+- `GoalHandler` (overlay effect: white **flash** + **"GOAL!"** text pop, `your_goals` scope,
+  reusing the Phase-2 burn path; `ass_builder` refactored to per-event inline styling + a flash
+  box). **Done** — rendered end-to-end on a your-goal clip (flash + GOAL! fire only on the
+  user's goals; assists/opponent get nothing).
+- **Exit:** goals detected and decorated end to end. **Met** (flash slice).
+- **Status: detection + flash effect complete (2026-07-01), validated. `slowmo` deferred to its
+  own slice (RETIME_SEGMENT + time-remap contract).**
 
 ### Phase 4 — Captions
 - `CaptionSource` (Whisper word-timing).
