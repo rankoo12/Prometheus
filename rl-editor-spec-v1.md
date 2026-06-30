@@ -411,7 +411,10 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - First end-to-end render: clip in → animated +12/+100 → mp4 out.
 - SFX dropped — no sound files (see §7.4); no audio mix this phase.
 - **Exit:** a clip renders with correctly-placed, animated +12/+100.
-- **Status: in progress (2026-06-30).**
+- **Status: ✅ complete (2026-06-30) — validated, PR #5 merged.** Real clip renders with +12/+100
+  popping above the gauge (pop + fade), Profile-driven position/color/animation. Carry-forward: add
+  `boost.text.size` to the Profile schema (handler defaults to 72px) and bundle a real font
+  (Arial fallback today) — both become user-editable in Phase 6 (Settings UI).
 
 ### Phase 3 — Goal detection + effects
 - `GoalSource` (score increment and/or transition detection).

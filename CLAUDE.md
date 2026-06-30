@@ -60,8 +60,11 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   are below the rise threshold by design, review-absorbed). Tools: `boost_timeline` (text),
   `verify_pickups` (montage), `preview_overlay` (burns markers onto the clip). Diagnostic
   tooling is in the session scratchpad. See spec §6.1.
-- **Phase 2 — boost overlays (SFX dropped, no sound files).** In progress: `BoostHandler` →
-  ASS `+12`/`+100` pop above the gauge (Profile-driven position) → `ass_builder` → `Renderer`
-  (FFmpeg burns the overlay) → first end-to-end render. No audio/SFX. Note: the Profile has no
-  `boost.text.size` yet (handler defaults to 72px) and `font_file` is a placeholder (system-font
-  fallback at render). See spec §7.1.
+- **Phase 2 — boost overlays (SFX dropped, no sound files).** Complete (validated, PR #5).
+  `BoostHandler` → ASS `+12`/`+100` pop above the gauge (Profile-driven position/color/animation)
+  → `ass_builder` → `Renderer` (FFmpeg burns the overlay) → end-to-end render, validated on a real
+  clip (+12/+100 appear above the gauge with pop+fade). No audio/SFX. **Carry-forward gaps** (to
+  fold in before/with the Settings UI): the Profile has no `boost.text.size` yet (handler defaults
+  to 72px), and `font_file` is a placeholder (Arial fallback at render — bundle a real font).
+  All style is Profile data, so position/color/size/font/animation become editable in **Phase 6
+  (Settings UI)** — the visual editor the user wants. See spec §7.1.
