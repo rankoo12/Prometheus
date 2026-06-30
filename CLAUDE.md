@@ -68,3 +68,17 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   to 72px), and `font_file` is a placeholder (Arial fallback at render — bundle a real font).
   All style is Profile data, so position/color/size/font/animation become editable in **Phase 6
   (Settings UI)** — the visual editor the user wants. See spec §7.1.
+- **Phase 3 — goal detection + effects.** Detection complete & validated (9/9 on labelled clips);
+  effect handler (flash) next; slowmo deferred to its own slice. Pipeline: `GoalSource` reads the
+  two scoreboard digits by **shape-matching a small exemplar bank** (`detection/score_templates/`,
+  0–4 so far) — robust to the score box's *semi-transparent background bleed* that defeats naive
+  pixel-diffing → a goal = a confirmed score **increment** (debounced; replay None-gaps skipped).
+  Ownership is by **position, not colour**: the user's team is always the LEFT box (colour varies —
+  blue/orange/gray club) → `side` = `your_team` (left) / `opponent` (right). `GoalScorer` then tags
+  each team goal `scorer` = `you` / `teammate` via the **"&lt;NAME&gt; SCORED!" banner** (PRIMARY —
+  matches the user's fixed name, one template not OCR; appears at the goal so it survives short
+  clips) + the **"GOAL +100" popup** (BACKUP, name-independent, appears ~2-3s late). Banks live in
+  `detection/scorer_templates/{name,popup}/`. Tools: `goal_timeline` (text), `goal_preview` (burns
+  YOU/ASSIST/OPP markers). Detection method pivoted from the spec's scene-change idea to scoreboard
+  reading (semantically stronger, no false fires on cuts/saves). See spec §6.2. Carry-forward: digit
+  bank needs scores ≥5; multi-user name input is future work.

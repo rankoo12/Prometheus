@@ -284,13 +284,28 @@ Where a `clip_job` = `{ clip_path, trim_in, trim_out, approved_events[] }`.
 
 ### 6.2 Goal detection
 
-**Signal:** Rocket League's full-screen goal transition + scoreboard increment. Large, unambiguous — easier than boost.
+**Signal (implemented):** the **scoreboard increment**. The user's stream layout shows the two
+score boxes (a fixed skewed overlay); the white digit inside a box only changes when that team
+scores. We read each digit by **shape-matching against a small exemplar bank** (`score_templates/`,
+digits 0–4 so far) — robust to the box's *semi-transparent background bleed*, which defeats naive
+pixel-diffing. A GOAL is a confirmed increment (several consecutive equal reads); a None read
+(absent scoreboard during a replay) is skipped so a goal's own replay gap doesn't break detection;
+goals within `min_gap_s` collapse (digit morph + RL celebration/kickoff). Scene-change detection
+was considered and dropped — semantically weaker (fires on cuts/saves).
 
-**Method (either or combined):**
-- Detect the score number changing (template-match the small scoreboard digits, watch for increment), and/or
-- Detect the goal-explosion/replay transition (large-scale scene change — histogram or frame-difference spike).
+**Ownership (not colour):** the user's team is always the **LEFT** box (colour varies — blue /
+orange / gray club — and is irrelevant). Left increment ⇒ `side="your_team"`, right ⇒ `"opponent"`.
 
-**Accuracy expectation:** high. Low risk relative to boost.
+**Personal scorer (you vs teammate):** for each team goal, `GoalScorer` decides `scorer="you"`
+or `"teammate"` by scanning a window around the goal for two shape-matched signals — PRIMARY the
+**"&lt;NAME&gt; SCORED!" banner** matching the user's name (appears right at the goal, survives clips
+that end seconds after; one name template, *not* full-alphabet OCR — `scorer_templates/name/`), and
+BACKUP the **"GOAL +100" popup** (only awarded when you score; name-independent but appears ~2–3s
+late so it alone misses short clips — `scorer_templates/popup/`). The score-time can lag the real
+goal, so the window reaches further before the goal than after.
+
+**Accuracy:** validated 9/9 on labelled clips (8 your-goals, 1 assist). Per-game tuning; the
+digit bank + name template grow with footage (scores ≥5; multi-user name input is future work).
 
 ### 6.3 Caption word-timing
 
@@ -417,9 +432,17 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
   (Arial fallback today) — both become user-editable in Phase 6 (Settings UI).
 
 ### Phase 3 — Goal detection + effects
-- `GoalSource` (score increment and/or transition detection).
-- `GoalHandler` (effect + SFX).
+- `GoalSource` (scoreboard-increment detection) + ownership (your_team / opponent) + `GoalScorer`
+  (you / teammate). **Done & validated** (§6.2) — 9/9 on labelled clips; tools `goal_timeline`,
+  `goal_preview`. Detection method pivoted from scene-change to scoreboard digit-reading (the
+  transparent score box defeats pixel-diffing; shape-matching is robust). Sliced per the agreed
+  plan: **detection first, then a `flash`/`GOAL!` overlay effect, then `slowmo` as a deliberate
+  second slice** (slowmo retimes a segment → shifts every later timestamp → needs `RETIME_SEGMENT`
+  + a time-remap contract; isolated on purpose).
+- `GoalHandler` (overlay effect: flash / "GOAL!" text, reusing the Phase-2 burn path). **Next.**
 - **Exit:** goals detected and decorated end to end.
+- **Status: detection complete (2026-07-01), validated. Effect handler (flash) pending; slowmo
+  deferred to its own slice.**
 
 ### Phase 4 — Captions
 - `CaptionSource` (Whisper word-timing).
