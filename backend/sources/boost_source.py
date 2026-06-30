@@ -126,10 +126,12 @@ class BoostSource(Source):
         clip_path: str,
         templates: dict[int, "object"],
         cfg: DetectionConfig | None = None,
+        verbose: bool = False,
     ) -> None:
         self.clip_path = clip_path
         self.templates = templates
         self.cfg = cfg or DetectionConfig()
+        self.verbose = verbose
 
     def detect(self) -> list[Event]:
         readings = smooth_values(list(self._read_series()), self.cfg.smooth_window)
@@ -138,6 +140,8 @@ class BoostSource(Source):
 
     def _read_series(self) -> Iterator[Reading]:
         # Lazy cv2 import so the pure detect_pickups path needs no OpenCV.
+        import sys
+
         import cv2
 
         from backend.detection.gauge import read_value
@@ -146,15 +150,24 @@ class BoostSource(Source):
         if not cap.isOpened():
             raise FileNotFoundError(f"Could not open clip: {self.clip_path}")
         fps = cap.get(cv2.CAP_PROP_FPS) or 60.0
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+        step = max(1, self.cfg.sample_every_n_frames)
         idx = 0
         try:
             while True:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                if idx % self.cfg.sample_every_n_frames == 0:
+                if idx % step == 0:
+                    ok, frame = cap.read()           # grab + decode
+                    if not ok:
+                        break
                     gr = read_value(frame, self.templates, self.cfg)
                     yield Reading(idx / fps, gr.value, gr.confidence)
+                elif not cap.grab():                  # advance without decoding
+                    break
+                if self.verbose and total and idx % 300 == 0:
+                    sys.stderr.write(f"\r  reading frame {idx}/{total} ...")
+                    sys.stderr.flush()
                 idx += 1
         finally:
             cap.release()
+            if self.verbose:
+                sys.stderr.write("\r  done reading frames.            \n")

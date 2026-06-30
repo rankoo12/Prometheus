@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 
 from backend.detection.config import DetectionConfig
-from backend.detection.matching import match_digit
+from backend.detection.matching import match_digit, prepare
 
 
 @dataclass(frozen=True)
@@ -24,8 +24,9 @@ class GaugeReading:
 
 
 def load_templates(dir_path: str | Path) -> dict[int, list[np.ndarray]]:
-    """Load digit exemplars from a directory. Each filename starts with the digit:
-    `<digit>.png` or `<digit>_<id>.png`. Returns {digit: [glyphs]} for 1-NN matching."""
+    """Load digit exemplars from a directory and prepare their fingerprints once.
+    Filenames start with the digit: `<digit>.png` or `<digit>_<id>.png`.
+    Returns {digit: [prepared fingerprints]} for fast 1-NN matching."""
     out: dict[int, list[np.ndarray]] = {}
     for p in Path(dir_path).glob("*.png"):
         head = p.stem.split("_")[0]
@@ -33,7 +34,7 @@ def load_templates(dir_path: str | Path) -> dict[int, list[np.ndarray]]:
             continue
         img = cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
         if img is not None:
-            out.setdefault(int(head), []).append(img)
+            out.setdefault(int(head), []).append(prepare(img))
     return out
 
 

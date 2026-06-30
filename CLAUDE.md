@@ -53,7 +53,9 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   detection + animation-aware debounce → +12/+100 by result. Digit recognition is
   **multi-exemplar 1-NN** over a bank of real glyphs (`detection/templates/<digit>_*.png`)
   on canonical grayscale fingerprints. The overlay *animates* the number up over several
-  frames, so a whole climb-then-settle is collapsed into one pickup at its peak. **Held-out
-  per-frame read ~79% (93% of read frames correct); event timelines clean (correct +12/+100,
-  no bursts).** Expand the bank with more labeled clips to push higher. Diagnostic tooling is
-  in the session scratchpad. See spec §6.1.
+  frames, so a whole climb-then-settle is collapsed into one pickup at its peak. Bank is ~171
+  glyphs from 2 labeled clips; timelines validated against user ground truth (big +100 / small
+  +12 correct; the 5/6 misreads that caused false +12s removed; near-full grabs like 96->100
+  are below the rise threshold by design, review-absorbed). Tools: `boost_timeline` (text),
+  `verify_pickups` (montage), `preview_overlay` (burns markers onto the clip). Diagnostic
+  tooling is in the session scratchpad. See spec §6.1.

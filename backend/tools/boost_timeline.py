@@ -27,7 +27,7 @@ def main() -> None:
     if not templates:
         print(f"WARNING: no templates in {args.templates_dir} — values will be unreadable")
 
-    events = BoostSource(args.clip, templates, DetectionConfig()).detect()
+    events = BoostSource(args.clip, templates, DetectionConfig(), verbose=True).detect()
     print(f"{len(events)} boost pickup(s):")
     for e in events:
         print(f"  t={e.t_start:7.3f}s  +{e.metadata['amount']:<3} conf={e.metadata['confidence']}")

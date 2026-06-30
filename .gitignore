@@ -10,8 +10,9 @@ node_modules/
 dist/
 out/
 
-# Local assets / scratch (generated test clips, logs)
+# Local assets / scratch (generated test clips, previews, logs)
 samples/
+preview*.mp4
 *.log
 
 # Claude Code (local, per-user)
