@@ -60,3 +60,8 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   are below the rise threshold by design, review-absorbed). Tools: `boost_timeline` (text),
   `verify_pickups` (montage), `preview_overlay` (burns markers onto the clip). Diagnostic
   tooling is in the session scratchpad. See spec §6.1.
+- **Phase 2 — boost overlays (SFX dropped, no sound files).** In progress: `BoostHandler` →
+  ASS `+12`/`+100` pop above the gauge (Profile-driven position) → `ass_builder` → `Renderer`
+  (FFmpeg burns the overlay) → first end-to-end render. No audio/SFX. Note: the Profile has no
+  `boost.text.size` yet (handler defaults to 72px) and `font_file` is a placeholder (system-font
+  fallback at render). See spec §7.1.

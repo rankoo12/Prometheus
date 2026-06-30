@@ -13,6 +13,7 @@ out/
 # Local assets / scratch (generated test clips, previews, logs)
 samples/
 preview*.mp4
+boost_render*.mp4
 *.log
 
 # Claude Code (local, per-user)
