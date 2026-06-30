@@ -317,7 +317,7 @@ Each approved boost event → an ASS overlay fragment via the `BoostHandler`:
 
 ### 7.4 SFX & music
 
-- SFX: each event kind maps to a file via the profile mapping table. `SfxHandler` emits `SFX_CUE` instructions (file + gain + timestamp).
+- SFX: **dropped (decided 2026-06-30).** The user has no boost sound files and won't source them, so `SfxHandler`/`SFX_CUE` and the `boost.sfx` mapping are not built. The seam stays open — add a Handler later if sound files ever appear (goal/other SFX likewise gated on having files).
 - Music: `MUSIC_BED` instruction; optional ducking under voice. Audio normalized to profile LUFS/true-peak at the end.
 
 ### 7.5 Thumbnail/badge
@@ -405,11 +405,13 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - **Exit:** boost event timeline is accurate enough (~85%+) on real footage. **Go/no-go gate for the whole project.**
 - **Status: ✅ complete (2026-06-30) — gate passed.** Validated on multiple real clips (one 100% correct, zero false positives). Multi-exemplar template 1-NN reading, animation-aware pickup detection, +12/+100 by result-or-rise. Audio-based detection was explored and dropped (no reference SFX; not distinguishable in game audio). Tools: `boost_timeline`, `verify_pickups`, `preview_overlay`.
 
-### Phase 2 — Boost overlays + SFX
-- `BoostHandler` → ASS text with pop animation (from profile).
-- `SfxHandler` + renderer audio mix for boost SFX.
-- First end-to-end render: clip in → boost pops + sounds → mp4 out.
-- **Exit:** a clip renders with correctly-placed, animated +12/+100 and sounds.
+### Phase 2 — Boost overlays (SFX dropped)
+- `BoostHandler` → ASS text with pop animation, positioned above the gauge (from profile).
+- `ass_builder` (ASS fragment) + `Renderer` (FFmpeg burns the overlay onto the clip).
+- First end-to-end render: clip in → animated +12/+100 → mp4 out.
+- SFX dropped — no sound files (see §7.4); no audio mix this phase.
+- **Exit:** a clip renders with correctly-placed, animated +12/+100.
+- **Status: in progress (2026-06-30).**
 
 ### Phase 3 — Goal detection + effects
 - `GoalSource` (score increment and/or transition detection).
