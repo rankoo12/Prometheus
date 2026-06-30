@@ -57,9 +57,11 @@ def main() -> None:
         for t0, t1, amt in windows:
             if t0 <= t <= t1:
                 color = (255, 255, 0) if amt >= 100 else (0, 220, 255)  # BGR: cyan / amber
-                org = (int(w * 0.34), int(h * 0.30))
-                cv2.putText(fr, f"+{amt}", org, cv2.FONT_HERSHEY_DUPLEX, h / 540, (0, 0, 0), 7)
-                cv2.putText(fr, f"+{amt}", org, cv2.FONT_HERSHEY_DUPLEX, h / 540, color, 3)
+                g = cfg.gauge  # place just above the boost gauge (preview of the Profile anchor)
+                org = (int(g.x * args.scale), int((g.y - 55) * args.scale))
+                fs = h / 760
+                cv2.putText(fr, f"+{amt}", org, cv2.FONT_HERSHEY_DUPLEX, fs, (0, 0, 0), 6)
+                cv2.putText(fr, f"+{amt}", org, cv2.FONT_HERSHEY_DUPLEX, fs, color, 2)
                 break
         out.write(fr)
         if total and idx % 200 == 0:
