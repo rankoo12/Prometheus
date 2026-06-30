@@ -45,7 +45,7 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
 
 ## Status
 - **Phase 0 — complete.** Shared contracts (`Event`, `EditInstruction`, `Profile`) + a `probe()` stdio round-trip, verified through the Electron UI on a real 1080×1920/60 clip.
-- **Phase 1 — boost detection (the go/no-go risk gate).** In progress. The HUD is a
+- **Phase 1 — boost detection (the go/no-go risk gate).** Complete (validated). The HUD is a
   BakkesMod-style boost panel (bottom-left of the gameplay area), so the gauge region +
   digit templates are tuned to that, not the spec's placeholder coords. Pipeline: crop →
   Otsu binary → segment (drop edge dial-arc, size/merged-digit filters) → per-digit

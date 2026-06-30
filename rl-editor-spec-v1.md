@@ -264,13 +264,13 @@ Where a `clip_job` = `{ clip_path, trim_in, trim_out, approved_events[] }`.
 
 ### 6.1 Boost pickup detection
 
-**Signal:** the boost gauge number in the bottom-left. (Confirmed in footage: digits sit on a dark semi-transparent rounded panel — a controlled background, which makes this tractable.)
+**Signal:** the boost-gauge number, lower-left of the gameplay area. (In the user's footage this is a BakkesMod-style panel: a radial dial with a large number — white at 100, orange below — over a busy background. Reading on a binarized crop makes colour/background irrelevant.)
 
 **Method:** template matching, not general OCR.
-1. One-time: extract clean reference templates for digits 0–9 from the user's own footage (consistent stylized blue font).
-2. Per frame: crop the gauge region (≈ x=20, y=1330, 240×240 — tighten to digit area once templates exist), match digits, read the value.
+1. One-time: extract clean digit templates 0–9 from the user's own footage (consistent stylized digital font). Use **many exemplars per digit** matched by 1-NN, not a single template — one-per-digit confuses 3/5/6/9.
+2. Per frame: crop the number region (actual ≈ x=65, y=1480, 160×66, above the "BOOST" label), Otsu-binarize, segment digits (drop the dial arc that sits at the crop edges), match each, read the value.
 3. Detect pickups as **upward jumps** above a threshold between consecutive reads.
-4. Classify by **result, not just jump size**: a small pad adds exactly +12 (capped at 100); a big pad fills to **100**. So `result == 100` with a jump > 12 ⇒ big pad; a clean +12 jump ⇒ small pad (see the near-full ambiguity below).
+4. Classify by **result and rise size**: a small pad adds exactly +12 (capped at 100); a big pad fills to **100**. So `result == 100` ⇒ big pad; a clean +12 jump ⇒ small pad. **Refinement (validated):** a big pad grabbed *while boosting* peaks below 100 (the simultaneous drain offsets it), so a large rise (≥ ~25, well beyond a small pad's +12) also classifies as a big pad even when the value never displays 100.
 
 **Known hazards (must handle):**
 - Boost **drains continuously** while driving — the number constantly drifts down. Only upward jumps count.
@@ -403,6 +403,7 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - CLI/test harness that prints the event timeline for a clip.
 - Tune against the user's real clips.
 - **Exit:** boost event timeline is accurate enough (~85%+) on real footage. **Go/no-go gate for the whole project.**
+- **Status: ✅ complete (2026-06-30) — gate passed.** Validated on multiple real clips (one 100% correct, zero false positives). Multi-exemplar template 1-NN reading, animation-aware pickup detection, +12/+100 by result-or-rise. Audio-based detection was explored and dropped (no reference SFX; not distinguishable in game audio). Tools: `boost_timeline`, `verify_pickups`, `preview_overlay`.
 
 ### Phase 2 — Boost overlays + SFX
 - `BoostHandler` → ASS text with pop animation (from profile).
