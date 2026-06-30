@@ -40,6 +40,7 @@ class DetectionConfig:
     full_value: int = 100                # a big pad fills to this
     full_read_tolerance: int = 1         # treat >= full_value - this as "full" (read noise)
     small_amount: int = 12               # a small pad adds this
+    big_pad_min_delta: int = 25          # a rise >= this = big pad (even if it never displayed 100)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "DetectionConfig":

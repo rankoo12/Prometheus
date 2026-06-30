@@ -41,6 +41,11 @@ def test_big_pad_near_full_classified_by_result():
     assert _amounts(detect_pickups(_series([88, 88, 100, 100]), CFG)) == [100]
 
 
+def test_big_pad_while_boosting_classified_big():
+    # big pad grabbed while boosting: ramps 10 -> 89 (never displays 100) => big +100 by rise
+    assert _amounts(detect_pickups(_series([10, 10, 40, 70, 89, 89, 89, 89, 89, 89]), CFG)) == [100]
+
+
 def test_small_pad_midrange():
     assert _amounts(detect_pickups(_series([50, 62, 62, 62]), CFG)) == [12]
 

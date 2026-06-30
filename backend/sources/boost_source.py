@@ -23,10 +23,13 @@ class Reading:
     confidence: float = 1.0
 
 
-def _classify(peak: int, cfg: DetectionConfig) -> int:
-    """+12 vs +100 by *result*, not jump size (spec §6.1): a big pad fills to 100,
-    so a near-full grab (e.g. 88 -> 100) is still a big pad."""
+def _classify(peak: int, baseline: int, cfg: DetectionConfig) -> int:
+    """+12 vs +100. A big pad fills to 100 (a near-full grab like 88 -> 100 is still big),
+    but grabbed *while boosting* it may peak below 100 -- so a large rise also means a big
+    pad. A small pad is +12; a rise >= big_pad_min_delta is a big pad regardless of peak."""
     if peak >= cfg.full_value - cfg.full_read_tolerance:
+        return cfg.full_value
+    if (peak - baseline) >= cfg.big_pad_min_delta:
         return cfg.full_value
     return cfg.small_amount
 
@@ -76,7 +79,7 @@ def detect_pickups(readings: Iterable[Reading], cfg: DetectionConfig) -> list[Ev
                     Event(
                         type=EventType.BOOST_PICKUP,
                         t_start=r.t,
-                        metadata={"amount": _classify(peak, cfg), "confidence": round(conf, 3)},
+                        metadata={"amount": _classify(peak, baseline, cfg), "confidence": round(conf, 3)},
                     )
                 )
                 baseline = peak
