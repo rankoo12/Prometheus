@@ -29,3 +29,5 @@ Thumbs.db
 goal_render*.mp4
 goal_effect_previews/
 caption_render*.mp4
+caption_previews/
+export*.mp4

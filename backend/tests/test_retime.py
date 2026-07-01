@@ -50,6 +50,18 @@ def test_remap_overlays_moves_start_keeps_duration():
     assert out[0].payload == {"text": "GOAL!"}
 
 
+def test_remap_overlays_stretches_caption_words():
+    # a caption tracks the (slowed) speech, so start/end AND each word start remap through the span
+    cap = EditInstruction(
+        InstructionKind.ASS_OVERLAY, t_start=11.0, t_end=11.6,
+        payload={"type": "caption", "words": [{"text": "a", "start": 11.0}, {"text": "b", "start": 11.3}]},
+    )
+    out = remap_overlays([cap], SEG)[0]      # SEG slows [10,12] to 0.5x
+    assert out.t_start == 12.0 and round(out.t_end, 2) == 13.2
+    assert out.payload["words"][0]["start"] == 12.0
+    assert round(out.payload["words"][1]["start"], 2) == 12.6
+
+
 def test_atempo_chain():
     assert _atempo_chain(0.5) == "atempo=0.5"
     assert _atempo_chain(0.25) == "atempo=0.5,atempo=0.5"
@@ -70,9 +82,24 @@ def test_build_filter_shape():
     assert "concat=n=3:v=1:a=0[vcat]" in filt          # before-slow-tail = 3 video pieces
     assert "setpts=(1/0.5)*(PTS-STARTPTS)" in filt      # the slowed piece
     assert "[vcat]subtitles=overlay.ass[vout]" in filt
-    assert "atempo=0.5" in filt and "concat=n=3:v=0:a=1[aout]" in filt
+    assert "atempo=0.5" in filt and "concat=n=3:v=0:a=1[voice]" in filt and "[aout]" in filt
 
 
 def test_build_filter_no_audio_omits_audio_chain():
     filt = build_filter(SEG, "overlay.ass", has_audio=False)
     assert "[aout]" not in filt and "atempo" not in filt
+
+
+def test_build_filter_no_segments_is_plain_subtitles():
+    filt = build_filter([], "overlay.ass", has_audio=True)
+    assert "[0:v]subtitles=overlay.ass[vout]" in filt   # no concat when nothing is retimed
+    assert "concat" not in filt and "[voice]" in filt
+
+
+def test_build_filter_music_duck_and_loudnorm():
+    filt = build_filter([], "overlay.ass", has_audio=True, music=True,
+                        music_gain_db=-8, duck=True, norm_lufs=-14, true_peak=-1.0)
+    assert "[1:a]volume=-8dB[music]" in filt
+    assert "sidechaincompress" in filt                  # ducking
+    assert "amix=inputs=2" in filt
+    assert "loudnorm=I=-14:TP=-1[aout]" in filt

@@ -71,31 +71,42 @@ def burn_overlay(clip_path: str, ass_text: str, out_path: str, crf: int = 19) ->
 
 
 def render(clip_path: str, instructions: list[EditInstruction], width: int, height: int,
-           out_path: str, crf: int = 19, font: str = "Arial", fps: int | None = None) -> str:
-    """Render a clip with overlays and any slow-motion retiming. With no RETIME_SEGMENTs this is
-    exactly the overlay burn; with them, the clip is split/retimed and overlays are re-timed onto
-    the output timeline first. `fps` forces constant frame rate on the retimed output (the slowed
-    span is otherwise VFR — duplicating frames to CFR keeps CapCut/players happy)."""
+           out_path: str, crf: int = 19, font: str = "Arial", fps: int | None = None,
+           music_path: str | None = None, music_gain_db: float = 0.0, duck: bool = False,
+           norm_lufs: float | None = None, true_peak: float = -1.0) -> str:
+    """Render a clip with overlays, optional slow-motion retiming, and optional music.
+
+    With no RETIME_SEGMENTs and no music this is the plain overlay burn. Otherwise it runs a
+    filtergraph: the clip is split/retimed (overlays re-timed onto the output timeline first),
+    and a looped `music_path` is mixed under the voice (gain, sidechain-ducked when `duck`) then
+    loudness-normalized to `norm_lufs`/`true_peak`. `fps` forces CFR (the slowed span is VFR)."""
     segments = segments_from(instructions)
     overlays = [i for i in instructions if i.kind is InstructionKind.ASS_OVERLAY]
-    if not segments:
-        return burn_overlay(clip_path, build_ass(overlays, width, height, font), out_path, crf)
-
     ff = _ffmpeg_path()
     clip_abs, out_abs = os.path.abspath(clip_path), os.path.abspath(out_path)
+    has_audio = _has_audio(clip_abs)
+    use_music = bool(music_path) and has_audio          # music mix needs the voice track
+
+    if not segments and not use_music:                  # fast path: just burn overlays, copy audio
+        return burn_overlay(clip_path, build_ass(overlays, width, height, font), out_path, crf)
+
     ass = build_ass(remap_overlays(overlays, segments), width, height, font)
     with tempfile.TemporaryDirectory() as td:
         (Path(td) / "overlay.ass").write_text(ass, encoding="utf-8")
-        has_audio = _has_audio(clip_abs)
-        filt = build_filter(segments, "overlay.ass", has_audio)
-        cmd = [ff, "-y", "-i", clip_abs, "-filter_complex", filt, "-map", "[vout]"]
+        filt = build_filter(segments, "overlay.ass", has_audio, music=use_music,
+                            music_gain_db=music_gain_db, duck=duck,
+                            norm_lufs=norm_lufs, true_peak=true_peak)
+        cmd = [ff, "-y", "-i", clip_abs]
+        if use_music:
+            cmd += ["-stream_loop", "-1", "-i", os.path.abspath(music_path)]
+        cmd += ["-filter_complex", filt, "-map", "[vout]"]
         if has_audio:
             cmd += ["-map", "[aout]"]
         cmd += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast"]
         if fps:
-            cmd += ["-r", str(fps)]                    # force CFR (slowed span is VFR otherwise)
+            cmd += ["-r", str(fps)]                     # force CFR (slowed span is VFR otherwise)
         if has_audio:
-            cmd += ["-c:a", "aac", "-b:a", "192k"]
+            cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]   # loudnorm can emit odd rates
         cmd += ["-movflags", "+faststart", out_abs]
         proc = subprocess.run(cmd, cwd=td, capture_output=True, text=True)
         if proc.returncode != 0:
