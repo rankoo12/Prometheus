@@ -81,7 +81,7 @@
   "music": {
     "enabled": true,
     "file": null,
-    "gain_db": -16,
+    "gain_db": -10,
     "duck_under_voice": true
   },
 

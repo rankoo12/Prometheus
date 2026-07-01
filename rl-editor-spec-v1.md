@@ -474,11 +474,18 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
   (word-by-word highlight, lower third). Tool: `render_captions`.
 - **Status: ✅ complete (2026-07-01), validated.**
 
-### Phase 5 — Trim, music, thumbnail, export
-- In-app trim (probe + in/out points → trimmed input to pipeline).
-- Music attach + fetch (yt-dlp) + ducking + normalization.
-- Thumbnail/badge static overlay.
-- **Exit:** full pipeline from raw clips → CapCut-ready export.
+### Phase 5 — Full export + music
+- **`pipeline.py`** — composition root: every enabled Source → every Handler → ONE `Renderer`
+  pass (all overlays + slow-mo retiming). Tool: `render_all`. Slow-mo × captions handled
+  (caption word times re-timed through slow-mo).
+- **Music** — a looped track mixed a controlled amount UNDER the voice: the VOICE is loudness-
+  normalized to `audio.normalize_lufs`, music sits `music.gain_db` below it (sidechain-ducked
+  when `duck_under_voice`), final `alimiter`. (Normalizing the *mix* re-boosted the music — fixed.)
+- **Exit:** raw clip → CapCut-ready montage (boost + goal + slow-mo + captions + music), 60fps CFR.
+  **Met** — validated on multiple clips with the user's real tracks.
+- **Status: ✅ complete (2026-07-01), validated.** The exact music/voice *balance* is deferred to
+  the Phase 6 volume sliders (tuning by re-render is too slow). **Deferred to Phase 6:** in-app
+  trim (in/out points), thumbnail/badge overlay, yt-dlp music fetch — all UI-driven, wired later.
 
 ### Phase 6 — Settings UI + event review + packaging
 - Electron profile editor (all §4.3 fields: colors, placement, caption style, animation, flash
@@ -490,6 +497,9 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
   caption text** — ASR is never 100% on fast/slangy speech, so let the user fix the occasional
   wrong word here. (Whisper `small.en` is the default; it transcribes more completely than
   medium.en on this footage.) User-confirmed direction (2026-07-01).
+- **Live volume sliders** — music level (`music.gain_db`) and clip/voice level, with instant
+  feedback. Getting the music/voice balance right by re-rendering is too slow; a slider is the
+  natural home for it. User-confirmed (2026-07-01). Pipeline already drives these as Profile data.
 - Package (PyInstaller backend + Electron bundle) — only if distributing beyond personal use.
 - Also fold in here: `boost.text.size` already exists on `goal.text`; a per-user **name input**
   for the goal scorer (see §6.2) and the **NVENC render toggle** (`output.encoder`) belong here.
