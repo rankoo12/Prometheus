@@ -488,7 +488,8 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
   position, animations, flash intensity live; grows an animation/font library over time.
 - Event-review timeline (delete false positives / nudge timing before render). **Includes editing
   caption text** — ASR is never 100% on fast/slangy speech, so let the user fix the occasional
-  wrong word here (the `medium.en` model already minimizes it). User-confirmed direction (2026-07-01).
+  wrong word here. (Whisper `small.en` is the default; it transcribes more completely than
+  medium.en on this footage.) User-confirmed direction (2026-07-01).
 - Package (PyInstaller backend + Electron bundle) — only if distributing beyond personal use.
 - Also fold in here: `boost.text.size` already exists on `goal.text`; a per-user **name input**
   for the goal scorer (see §6.2) and the **NVENC render toggle** (`output.encoder`) belong here.
