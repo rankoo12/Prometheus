@@ -466,9 +466,15 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - **Exit:** full pipeline from raw clips → CapCut-ready export.
 
 ### Phase 6 — Settings UI + event review + packaging
-- Electron profile editor (all §4.3 fields: colors, placement, SFX map, caption style, animation).
+- Electron profile editor (all §4.3 fields: colors, placement, caption style, animation, flash
+  intensity/timing, text content/size/position). Every effect value is already Profile data, so
+  this phase is about *exposing* it — no detection/handler rework. **Desired UX (user, 2026-07-01):**
+  a **simple "editor / lightweight-Photoshop" vibe** — nice, uncomplicated UI to tweak text, fonts,
+  position, animations, flash intensity live; grows an animation/font library over time.
 - Event-review timeline (delete false positives / nudge timing before render).
 - Package (PyInstaller backend + Electron bundle) — only if distributing beyond personal use.
+- Also fold in here: `boost.text.size` already exists on `goal.text`; a per-user **name input**
+  for the goal scorer (see §6.2) and the **NVENC render toggle** (`output.encoder`) belong here.
 - **Exit:** shippable personal tool.
 
 ---
