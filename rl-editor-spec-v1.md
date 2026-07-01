@@ -284,13 +284,28 @@ Where a `clip_job` = `{ clip_path, trim_in, trim_out, approved_events[] }`.
 
 ### 6.2 Goal detection
 
-**Signal:** Rocket League's full-screen goal transition + scoreboard increment. Large, unambiguous — easier than boost.
+**Signal (implemented):** the **scoreboard increment**. The user's stream layout shows the two
+score boxes (a fixed skewed overlay); the white digit inside a box only changes when that team
+scores. We read each digit by **shape-matching against a small exemplar bank** (`score_templates/`,
+digits 0–4 so far) — robust to the box's *semi-transparent background bleed*, which defeats naive
+pixel-diffing. A GOAL is a confirmed increment (several consecutive equal reads); a None read
+(absent scoreboard during a replay) is skipped so a goal's own replay gap doesn't break detection;
+goals within `min_gap_s` collapse (digit morph + RL celebration/kickoff). Scene-change detection
+was considered and dropped — semantically weaker (fires on cuts/saves).
 
-**Method (either or combined):**
-- Detect the score number changing (template-match the small scoreboard digits, watch for increment), and/or
-- Detect the goal-explosion/replay transition (large-scale scene change — histogram or frame-difference spike).
+**Ownership (not colour):** the user's team is always the **LEFT** box (colour varies — blue /
+orange / gray club — and is irrelevant). Left increment ⇒ `side="your_team"`, right ⇒ `"opponent"`.
 
-**Accuracy expectation:** high. Low risk relative to boost.
+**Personal scorer (you vs teammate):** for each team goal, `GoalScorer` decides `scorer="you"`
+or `"teammate"` by scanning a window around the goal for two shape-matched signals — PRIMARY the
+**"&lt;NAME&gt; SCORED!" banner** matching the user's name (appears right at the goal, survives clips
+that end seconds after; one name template, *not* full-alphabet OCR — `scorer_templates/name/`), and
+BACKUP the **"GOAL +100" popup** (only awarded when you score; name-independent but appears ~2–3s
+late so it alone misses short clips — `scorer_templates/popup/`). The score-time can lag the real
+goal, so the window reaches further before the goal than after.
+
+**Accuracy:** validated 9/9 on labelled clips (8 your-goals, 1 assist). Per-game tuning; the
+digit bank + name template grow with footage (scores ≥5; multi-user name input is future work).
 
 ### 6.3 Caption word-timing
 
@@ -309,7 +324,16 @@ Each approved boost event → an ASS overlay fragment via the `BoostHandler`:
 
 ### 7.2 Goal effects
 
-`GoalHandler` emits the configured effect (slowmo segment / flash) + goal SFX cue, per profile.
+`GoalHandler` → ASS_OVERLAY instructions for the goal celebration, styled from `profile.goal`:
+a white **flash** (full-frame box, fades in to `max_opacity` then out) plus a **"GOAL!" text
+pop** (centre-screen, same pop+fade as boost). `goal.scope` selects which goals fire it —
+**`your_goals`** (default: only `side=="your_team"` & `scorer=="you"`) or `all`. Both reuse the
+Phase-2 burn path: `ass_builder` (now per-event inline styling; a payload `type:"flash"` draws
+the box) → `Renderer`. No SFX (§7.4). **`slowmo` (done):** for a celebrated goal, GoalHandler
+also emits a `RETIME_SEGMENT` slowing a span around the goal (`goal.slowmo`: `speed`, `pre_s`,
+`post_s`). The `Renderer` splits the clip at the segment (setpts/atempo + concat), **re-times
+every overlay onto the output timeline** (`render/retime.py` — pure `remap_time`; the slowed
+span shifts all later timestamps), burns them, and forces CFR output (the slowed span is VFR).
 
 ### 7.3 Captions (ASS karaoke)
 
@@ -411,12 +435,28 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - First end-to-end render: clip in → animated +12/+100 → mp4 out.
 - SFX dropped — no sound files (see §7.4); no audio mix this phase.
 - **Exit:** a clip renders with correctly-placed, animated +12/+100.
-- **Status: in progress (2026-06-30).**
+- **Status: ✅ complete (2026-06-30) — validated, PR #5 merged.** Real clip renders with +12/+100
+  popping above the gauge (pop + fade), Profile-driven position/color/animation. Carry-forward: add
+  `boost.text.size` to the Profile schema (handler defaults to 72px) and bundle a real font
+  (Arial fallback today) — both become user-editable in Phase 6 (Settings UI).
 
 ### Phase 3 — Goal detection + effects
-- `GoalSource` (score increment and/or transition detection).
-- `GoalHandler` (effect + SFX).
-- **Exit:** goals detected and decorated end to end.
+- `GoalSource` (scoreboard-increment detection) + ownership (your_team / opponent) + `GoalScorer`
+  (you / teammate). **Done & validated** (§6.2) — 9/9 on labelled clips; tools `goal_timeline`,
+  `goal_preview`. Detection method pivoted from scene-change to scoreboard digit-reading (the
+  transparent score box defeats pixel-diffing; shape-matching is robust). Sliced per the agreed
+  plan: **detection first, then a `flash`/`GOAL!` overlay effect, then `slowmo` as a deliberate
+  second slice** (slowmo retimes a segment → shifts every later timestamp → needs `RETIME_SEGMENT`
+  + a time-remap contract; isolated on purpose).
+- `GoalHandler` (overlay effect: white **flash** + **"GOAL!"** text pop, `your_goals` scope,
+  reusing the Phase-2 burn path; `ass_builder` refactored to per-event inline styling + a flash
+  box). **Done** — rendered end-to-end on a your-goal clip (flash + GOAL! fire only on the
+  user's goals; assists/opponent get nothing).
+- `slowmo` (done): GoalHandler emits `RETIME_SEGMENT` per celebrated goal; `Renderer` splits/
+  retimes the clip (setpts/atempo + concat), re-times overlays onto the output timeline
+  (`retime.py`), forces CFR. Validated (goal plays 0.5x, overlays re-aligned, clip lengthens).
+- **Exit:** goals detected and decorated end to end. **Met.**
+- **Status: ✅ complete (2026-07-01) — detection + scorer + flash/"GOAL!" + slowmo, all validated.**
 
 ### Phase 4 — Captions
 - `CaptionSource` (Whisper word-timing).
@@ -430,9 +470,15 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - **Exit:** full pipeline from raw clips → CapCut-ready export.
 
 ### Phase 6 — Settings UI + event review + packaging
-- Electron profile editor (all §4.3 fields: colors, placement, SFX map, caption style, animation).
+- Electron profile editor (all §4.3 fields: colors, placement, caption style, animation, flash
+  intensity/timing, text content/size/position). Every effect value is already Profile data, so
+  this phase is about *exposing* it — no detection/handler rework. **Desired UX (user, 2026-07-01):**
+  a **simple "editor / lightweight-Photoshop" vibe** — nice, uncomplicated UI to tweak text, fonts,
+  position, animations, flash intensity live; grows an animation/font library over time.
 - Event-review timeline (delete false positives / nudge timing before render).
 - Package (PyInstaller backend + Electron bundle) — only if distributing beyond personal use.
+- Also fold in here: `boost.text.size` already exists on `goal.text`; a per-user **name input**
+  for the goal scorer (see §6.2) and the **NVENC render toggle** (`output.encoder`) belong here.
 - **Exit:** shippable personal tool.
 
 ---

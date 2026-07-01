@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from backend.handlers.boost_handler import BoostHandler
+from backend.handlers.goal_handler import GoalHandler
 from backend.models.event import Event, EventType
+from backend.models.instruction import EditInstruction, InstructionKind
 from backend.models.profile import Profile
-from backend.render.ass_builder import _ass_color, build_ass
+from backend.render.ass_builder import _ass_alpha, _ass_color, build_ass
 
 
 def _overlays():
@@ -30,3 +32,22 @@ def test_dialogue_per_overlay_with_tags():
 def test_empty_has_header_no_dialogue():
     ass = build_ass([], 1080, 1920)
     assert "[Events]" in ass and ass.count("Dialogue:") == 0
+
+
+def test_per_event_inline_style():
+    # each overlay carries its own size/colour inline, not a single global style
+    ass = build_ass(_overlays(), 1080, 1920)
+    assert "\\fs" in ass and "\\1c" in ass and "\\3c" in ass
+
+
+def test_ass_alpha_maps_opacity():
+    assert _ass_alpha(1.0) == "&H00&"      # opaque
+    assert _ass_alpha(0.0) == "&HFF&"      # transparent
+
+
+def test_goal_flash_draws_full_frame_box():
+    goal = Event(EventType.GOAL, t_start=5.0, metadata={"side": "your_team", "scorer": "you"})
+    ass = build_ass(GoalHandler().handle([goal], Profile.load()), 1080, 1920)
+    assert "GOAL!" in ass                            # the text pop
+    assert "\\p1}" in ass and "l 1080 0 1080 1920" in ass   # the flash box drawing spans the frame
+    assert "Dialogue: 0," in ass and "Dialogue: 1," in ass  # flash under (L0), text over (L1)

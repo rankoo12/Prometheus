@@ -14,6 +14,8 @@ out/
 samples/
 preview*.mp4
 boost_render*.mp4
+goal_previews/
+*__goals.mp4
 *.log
 
 # Claude Code (local, per-user)
@@ -24,3 +26,5 @@ boost_render*.mp4
 Thumbs.db
 .vscode/
 .idea/
+goal_render*.mp4
+goal_effect_previews/

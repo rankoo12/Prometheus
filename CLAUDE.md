@@ -60,8 +60,35 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   are below the rise threshold by design, review-absorbed). Tools: `boost_timeline` (text),
   `verify_pickups` (montage), `preview_overlay` (burns markers onto the clip). Diagnostic
   tooling is in the session scratchpad. See spec §6.1.
-- **Phase 2 — boost overlays (SFX dropped, no sound files).** In progress: `BoostHandler` →
-  ASS `+12`/`+100` pop above the gauge (Profile-driven position) → `ass_builder` → `Renderer`
-  (FFmpeg burns the overlay) → first end-to-end render. No audio/SFX. Note: the Profile has no
-  `boost.text.size` yet (handler defaults to 72px) and `font_file` is a placeholder (system-font
-  fallback at render). See spec §7.1.
+- **Phase 2 — boost overlays (SFX dropped, no sound files).** Complete (validated, PR #5).
+  `BoostHandler` → ASS `+12`/`+100` pop above the gauge (Profile-driven position/color/animation)
+  → `ass_builder` → `Renderer` (FFmpeg burns the overlay) → end-to-end render, validated on a real
+  clip (+12/+100 appear above the gauge with pop+fade). No audio/SFX. **Carry-forward gaps** (to
+  fold in before/with the Settings UI): the Profile has no `boost.text.size` yet (handler defaults
+  to 72px), and `font_file` is a placeholder (Arial fallback at render — bundle a real font).
+  All style is Profile data, so position/color/size/font/animation become editable in **Phase 6
+  (Settings UI)** — the visual editor the user wants. See spec §7.1.
+- **Phase 3 — goal detection + effects.** Detection complete & validated (9/9 on labelled clips);
+  effect handler (flash) next; slowmo deferred to its own slice. Pipeline: `GoalSource` reads the
+  two scoreboard digits by **shape-matching a small exemplar bank** (`detection/score_templates/`,
+  0–4 so far) — robust to the score box's *semi-transparent background bleed* that defeats naive
+  pixel-diffing → a goal = a confirmed score **increment** (debounced; replay None-gaps skipped).
+  Ownership is by **position, not colour**: the user's team is always the LEFT box (colour varies —
+  blue/orange/gray club) → `side` = `your_team` (left) / `opponent` (right). `GoalScorer` then tags
+  each team goal `scorer` = `you` / `teammate` via the **"&lt;NAME&gt; SCORED!" banner** (PRIMARY —
+  matches the user's fixed name, one template not OCR; appears at the goal so it survives short
+  clips) + the **"GOAL +100" popup** (BACKUP, name-independent, appears ~2-3s late). Banks live in
+  `detection/scorer_templates/{name,popup}/`. Tools: `goal_timeline` (text), `goal_preview` (burns
+  YOU/ASSIST/OPP markers). Detection method pivoted from the spec's scene-change idea to scoreboard
+  reading (semantically stronger, no false fires on cuts/saves). See spec §6.2. Carry-forward: digit
+  bank needs scores ≥5; multi-user name input is future work.
+  **Goal effect (flash slice — done):** `GoalHandler` → white **flash** (full-frame ASS box) +
+  **"GOAL!"** text pop, Profile-styled (`goal.scope=your_goals` → only the user's own goals fire
+  it; assists/opponent get nothing). `ass_builder` refactored to **per-event inline styling**
+  (boost/goal/captions each carry their own look; payload `type:"flash"` draws the box) — boost
+  output unchanged. Tool: `render_goal`. **Slowmo (done):** GoalHandler emits a `RETIME_SEGMENT`
+  per celebrated goal (`goal.slowmo`); the `Renderer` splits/retimes the clip (setpts/atempo +
+  concat), **re-times every overlay onto the output timeline** (`render/retime.py` — pure
+  `remap_time`, since slowing a span shifts all later timestamps), burns them, and forces CFR
+  (the slowed span is VFR). See spec §7.2. **Phase 3 complete** (detection + scorer + flash/GOAL!
+  + slowmo, all validated).

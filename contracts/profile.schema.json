@@ -88,17 +88,70 @@
     "goal": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "effect", "sfx"],
+      "required": ["enabled", "scope", "slowmo", "flash", "text", "animation"],
       "properties": {
         "enabled": { "type": "boolean" },
-        "effect": { "type": "string", "enum": ["slowmo", "flash", "none"] },
-        "sfx": {
+        "scope": { "type": "string", "enum": ["your_goals", "all"] },
+        "slowmo": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["file", "gain_db"],
+          "required": ["enabled", "speed", "pre_s", "post_s"],
           "properties": {
-            "file": { "type": "string" },
-            "gain_db": { "$ref": "#/$defs/gainDb" }
+            "enabled": { "type": "boolean" },
+            "speed": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            "pre_s": { "type": "number", "minimum": 0 },
+            "post_s": { "type": "number", "minimum": 0 }
+          }
+        },
+        "flash": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "color", "max_opacity", "fade_in_ms", "hold_ms", "fade_out_ms"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "color": { "$ref": "#/$defs/hexColor" },
+            "max_opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+            "fade_in_ms": { "type": "number", "minimum": 0 },
+            "hold_ms": { "type": "number", "minimum": 0 },
+            "fade_out_ms": { "type": "number", "minimum": 0 }
+          }
+        },
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "label", "font_file", "color", "outline_color", "outline_width", "size", "position"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "label": { "type": "string" },
+            "font_file": { "type": "string" },
+            "color": { "$ref": "#/$defs/hexColor" },
+            "outline_color": { "$ref": "#/$defs/hexColor" },
+            "outline_width": { "type": "number", "minimum": 0 },
+            "size": { "type": "number", "minimum": 1 },
+            "position": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["anchor", "x_offset", "y_offset"],
+              "properties": {
+                "anchor": { "type": "string" },
+                "x_offset": { "type": "number" },
+                "y_offset": { "type": "number" }
+              }
+            }
+          }
+        },
+        "animation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pop_duration_ms", "start_scale", "overshoot_scale", "settle_scale", "fade_in_ms", "hold_ms", "fade_out_ms"],
+          "properties": {
+            "pop_duration_ms": { "type": "number", "minimum": 0 },
+            "start_scale": { "type": "number", "minimum": 0 },
+            "overshoot_scale": { "type": "number", "minimum": 0 },
+            "settle_scale": { "type": "number", "minimum": 0 },
+            "fade_in_ms": { "type": "number", "minimum": 0 },
+            "hold_ms": { "type": "number", "minimum": 0 },
+            "fade_out_ms": { "type": "number", "minimum": 0 }
           }
         }
       }
