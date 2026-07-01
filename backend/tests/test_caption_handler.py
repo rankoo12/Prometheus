@@ -35,12 +35,20 @@ def test_line_timing_spans_chunk_plus_hold():
     assert round(line.t_end, 2) == 26.1                       # last word end (25.8) + 0.3 hold
 
 
-def test_karaoke_durations_centiseconds():
+def test_words_carry_text_and_absolute_start():
     instrs = CaptionHandler().handle(NICE_SHOT, Profile.load())
     words = instrs[0].payload["words"]
     assert [w["text"] for w in words] == ["Nice", "shot"]
-    # "Nice" holds until "shot" starts (25.3-25.0 = 0.30s = 30cs); "shot" holds its own span (50cs)
-    assert words[0]["kdur"] == 30 and words[1]["kdur"] == 50
+    assert [w["start"] for w in words] == [25.0, 25.3]     # absolute -> renderer highlights per word
+
+
+def test_consecutive_lines_do_not_overlap():
+    prof = Profile.load()
+    prof.data["captions"]["words_per_chunk"] = 1              # each word its own line
+    words = _words([("a", 1.0, 1.2), ("b", 1.3, 1.6)])        # closer than the 0.3s hold
+    instrs = CaptionHandler().handle(words, prof)
+    assert len(instrs) == 2
+    assert instrs[0].t_end <= instrs[1].t_start              # first line capped at the next's start
 
 
 def test_style_and_position_from_profile():

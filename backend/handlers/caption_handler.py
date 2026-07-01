@@ -1,9 +1,10 @@
 """CaptionHandler — turn CAPTION_WORD events into karaoke caption overlays (spec §7.3).
 
-Stage 2: groups words into chunks of `words_per_chunk`, and for each chunk emits one ASS_OVERLAY
-(payload type "caption") carrying per-word karaoke durations. The renderer highlights each word
-from `base_color` to `active_color` as it's spoken (ASS \\k), with an optional pop-in. Pure — no
-Whisper, no rendering.
+Stage 2: groups words into chunks of `words_per_chunk` (breaking on pauses), and for each chunk
+emits one ASS_OVERLAY (payload type "caption") carrying the words with their absolute start
+times. The renderer highlights only the CURRENTLY-spoken word `active_color`; already-spoken
+words revert to `base_color` (word-by-word, not a cumulative fill). Consecutive lines are clamped
+so they never overlap. Pure — no Whisper, no rendering.
 """
 from __future__ import annotations
 
@@ -42,17 +43,21 @@ class CaptionHandler(Handler):
         out_cfg = profile.data["output"]
         x, y = self._position(cap["position"], int(out_cfg["width"]), int(out_cfg["height"]))
         anim = cap["animation"]
+        chunks = _chunks(words, int(cap["words_per_chunk"]))
 
         out: list[EditInstruction] = []
-        for chunk in _chunks(words, int(cap["words_per_chunk"])):
+        for idx, chunk in enumerate(chunks):
+            line_end = chunk[-1].t_end + _HOLD_S
+            if idx + 1 < len(chunks):
+                line_end = min(line_end, chunks[idx + 1][0].t_start)   # never overlap the next line
             out.append(
                 EditInstruction(
                     kind=InstructionKind.ASS_OVERLAY,
                     t_start=chunk[0].t_start,
-                    t_end=chunk[-1].t_end + _HOLD_S,
+                    t_end=line_end,
                     payload={
                         "type": "caption",
-                        "words": self._karaoke(chunk),
+                        "words": [{"text": w.metadata.get("word", ""), "start": w.t_start} for w in chunk],
                         "x": x,
                         "y": y,
                         "size": cap["size"],
@@ -67,17 +72,6 @@ class CaptionHandler(Handler):
                 )
             )
         return out
-
-    @staticmethod
-    def _karaoke(chunk: list[Event]) -> list[dict]:
-        """Per-word {text, kdur} where kdur (centiseconds) is the time until the next word starts
-        (the last word holds for its own duration). ASS \\k highlights word-by-word from these."""
-        words = []
-        for i, w in enumerate(chunk):
-            nxt = chunk[i + 1].t_start if i + 1 < len(chunk) else w.t_end
-            kdur = max(1, round((nxt - w.t_start) * 100))
-            words.append({"text": w.metadata.get("word", ""), "kdur": kdur})
-        return words
 
     @staticmethod
     def _position(pos: dict, w: int, h: int) -> tuple[int, int]:

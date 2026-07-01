@@ -54,7 +54,7 @@ def test_goal_flash_draws_full_frame_box():
     assert "Dialogue: 0," in ass and "Dialogue: 1," in ass  # flash under (L0), text over (L1)
 
 
-def test_caption_karaoke_line():
+def test_caption_word_by_word_highlight():
     prof = Profile.load()
     prof.data["captions"]["words_per_chunk"] = 4
     words = [
@@ -62,5 +62,7 @@ def test_caption_karaoke_line():
         Event(EventType.CAPTION_WORD, t_start=25.3, t_end=25.8, metadata={"word": "shot"}),
     ]
     ass = build_ass(CaptionHandler().handle(words, prof), 1080, 1920)
-    assert "\\k30}Nice" in ass and "\\k50}shot" in ass       # per-word karaoke timings
-    assert "\\2c" in ass                                      # secondary (base) colour set for \k
+    assert ass.count("Dialogue:") == 2                       # one Dialogue per word (highlight tracks)
+    assert _ass_color(prof.data["captions"]["active_color"]) in ass    # active word colour present
+    assert _ass_color(prof.data["captions"]["base_color"]) in ass      # ...and base for the others
+    assert "Nice" in ass and "shot" in ass

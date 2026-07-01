@@ -92,28 +92,44 @@ def _flash_event(p: dict, w: int, h: int) -> str:
     return f"{tags}m 0 0 l {w} 0 {w} {h} 0 {h}{{\\p0}}"
 
 
-def _caption_event(p: dict) -> str:
-    """A lower-third karaoke line: each word highlights base->active as spoken (ASS \\k), with an
-    optional pop-in. Primary colour = active (sung), Secondary = base (not yet sung)."""
+def _caption_dialogues(inst: EditInstruction) -> list[str]:
+    """A lower-third caption where ONLY the currently-spoken word is `active_color` (others revert
+    to `base_color`). One Dialogue per word — active during [word.start, next_word.start) — so the
+    highlight tracks the current word instead of accumulating. Line fades in on the first word and
+    out on the last (no fade between, so word-to-word switches are seamless); optional pop-in."""
+    p = inst.payload
+    words = p.get("words", [])
+    if not words:
+        return []
+    line_end = inst.t_end if inst.t_end is not None else words[-1]["start"]
     x, y = int(p["x"]), int(p["y"])
     size = int(p.get("size", 72))
     active = _ass_color(p.get("active_color", "#FFD400"))
     base = _ass_color(p.get("base_color", "#FFFFFF"))
     outline = _ass_color(p.get("outline_color", "#000000"))
     bord = p.get("outline_width", 4)
-    tags = f"{{\\an2\\pos({x},{y})\\fs{size}\\1c{active}\\2c{base}\\3c{outline}\\bord{bord}"
-    if p.get("pop_in"):
-        pop = int(p.get("pop_duration_ms", 120))
-        tags += f"\\fscx70\\fscy70\\t(0,{pop},\\fscx100\\fscy100)"
-    tags += "\\fad(60,120)}"
-    karaoke = "".join(f"{{\\k{w['kdur']}}}{w['text']} " for w in p.get("words", [])).strip()
-    return tags + karaoke
+    pop_in, pop = p.get("pop_in"), int(p.get("pop_duration_ms", 120))
+    n = len(words)
+
+    dialogues = []
+    for i in range(n):
+        hs = words[i]["start"]
+        he = words[i + 1]["start"] if i + 1 < n else line_end
+        if he <= hs:
+            he = hs + 0.05
+        text = " ".join(f"{{\\1c{active if j == i else base}}}{words[j]['text']}" for j in range(n))
+        lead = f"{{\\an2\\pos({x},{y})\\fs{size}\\3c{outline}\\bord{bord}"
+        if pop_in and i == 0:
+            lead += f"\\fscx70\\fscy70\\t(0,{pop},\\fscx100\\fscy100)"
+        lead += f"\\fad({60 if i == 0 else 0},{120 if i == n - 1 else 0})}}"
+        dialogues.append(f"Dialogue: 1,{_ass_time(hs)},{_ass_time(he)},Default,,0,0,0,,{lead}{text}")
+    return dialogues
 
 
 def build_ass(instructions: list[EditInstruction], width: int, height: int, font: str = "Arial") -> str:
     """Render ASS_OVERLAY instructions into a full .ass document. Each payload carries its own
-    style; a payload `type` of "flash" draws a full-frame box (Layer 0), "caption" a karaoke
-    line (Layer 1); anything else is a styled text pop (Layer 1)."""
+    style; a payload `type` of "flash" draws a full-frame box (Layer 0), "caption" a word-by-word
+    highlighted line (Layer 1, one Dialogue per word); anything else is a styled text pop (Layer 1)."""
     overlays = [i for i in instructions if i.kind is InstructionKind.ASS_OVERLAY]
     out = [_HEADER.format(w=width, h=height, font=font)]
     for inst in overlays:
@@ -124,7 +140,7 @@ def build_ass(instructions: list[EditInstruction], width: int, height: int, font
         if kind == "flash":
             out.append(f"Dialogue: 0,{start_t},{end_t},Default,,0,0,0,,{_flash_event(p, width, height)}")
         elif kind == "caption":
-            out.append(f"Dialogue: 1,{start_t},{end_t},Default,,0,0,0,,{_caption_event(p)}")
+            out.extend(_caption_dialogues(inst))
         else:
             body = _text_tags(p) + str(p["text"]).replace("\n", "\\N")
             out.append(f"Dialogue: 1,{start_t},{end_t},Default,,0,0,0,,{body}")
