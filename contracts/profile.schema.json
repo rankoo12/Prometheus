@@ -88,10 +88,21 @@
     "goal": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "scope", "flash", "text", "animation"],
+      "required": ["enabled", "scope", "slowmo", "flash", "text", "animation"],
       "properties": {
         "enabled": { "type": "boolean" },
         "scope": { "type": "string", "enum": ["your_goals", "all"] },
+        "slowmo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "speed", "pre_s", "post_s"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "speed": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            "pre_s": { "type": "number", "minimum": 0 },
+            "post_s": { "type": "number", "minimum": 0 }
+          }
+        },
         "flash": {
           "type": "object",
           "additionalProperties": false,

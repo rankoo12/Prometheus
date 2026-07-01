@@ -11,6 +11,7 @@ class InstructionKind(str, Enum):
     SFX_CUE = "SFX_CUE"
     MUSIC_BED = "MUSIC_BED"
     STATIC_OVERLAY = "STATIC_OVERLAY"
+    RETIME_SEGMENT = "RETIME_SEGMENT"   # slow/speed a span [t_start,t_end]; payload {"speed": float}
 
 
 @dataclass

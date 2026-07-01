@@ -28,6 +28,7 @@
   "goal": {
     "enabled": true,
     "scope": "your_goals",
+    "slowmo": { "enabled": true, "speed": 0.5, "pre_s": 1.7, "post_s": 0.5 },
     "flash": {
       "enabled": true,
       "color": "#FFFFFF",

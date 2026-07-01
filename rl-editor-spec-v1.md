@@ -329,9 +329,11 @@ a white **flash** (full-frame box, fades in to `max_opacity` then out) plus a **
 pop** (centre-screen, same pop+fade as boost). `goal.scope` selects which goals fire it —
 **`your_goals`** (default: only `side=="your_team"` & `scorer=="you"`) or `all`. Both reuse the
 Phase-2 burn path: `ass_builder` (now per-event inline styling; a payload `type:"flash"` draws
-the box) → `Renderer`. No SFX (§7.4). **`slowmo` is a separate later slice** — it retimes a
-segment, shifting every later timestamp, so it needs a `RETIME_SEGMENT` instruction + a
-time-remap contract and is kept isolated on purpose.
+the box) → `Renderer`. No SFX (§7.4). **`slowmo` (done):** for a celebrated goal, GoalHandler
+also emits a `RETIME_SEGMENT` slowing a span around the goal (`goal.slowmo`: `speed`, `pre_s`,
+`post_s`). The `Renderer` splits the clip at the segment (setpts/atempo + concat), **re-times
+every overlay onto the output timeline** (`render/retime.py` — pure `remap_time`; the slowed
+span shifts all later timestamps), burns them, and forces CFR output (the slowed span is VFR).
 
 ### 7.3 Captions (ASS karaoke)
 
@@ -450,9 +452,11 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
   reusing the Phase-2 burn path; `ass_builder` refactored to per-event inline styling + a flash
   box). **Done** — rendered end-to-end on a your-goal clip (flash + GOAL! fire only on the
   user's goals; assists/opponent get nothing).
-- **Exit:** goals detected and decorated end to end. **Met** (flash slice).
-- **Status: detection + flash effect complete (2026-07-01), validated. `slowmo` deferred to its
-  own slice (RETIME_SEGMENT + time-remap contract).**
+- `slowmo` (done): GoalHandler emits `RETIME_SEGMENT` per celebrated goal; `Renderer` splits/
+  retimes the clip (setpts/atempo + concat), re-times overlays onto the output timeline
+  (`retime.py`), forces CFR. Validated (goal plays 0.5x, overlays re-aligned, clip lengthens).
+- **Exit:** goals detected and decorated end to end. **Met.**
+- **Status: ✅ complete (2026-07-01) — detection + scorer + flash/"GOAL!" + slowmo, all validated.**
 
 ### Phase 4 — Captions
 - `CaptionSource` (Whisper word-timing).

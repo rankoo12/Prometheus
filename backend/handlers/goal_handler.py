@@ -29,6 +29,17 @@ class GoalHandler(Handler):
         for e in events:
             if e.type is not EventType.GOAL or not self._in_scope(e, scope):
                 continue
+            slowmo = goal["slowmo"]
+            if slowmo.get("enabled", False):
+                # slow a span around the goal; clamp start at 0 (clip may begin mid-span)
+                out.append(
+                    EditInstruction(
+                        kind=InstructionKind.RETIME_SEGMENT,
+                        t_start=max(0.0, e.t_start - slowmo["pre_s"]),
+                        t_end=e.t_start + slowmo["post_s"],
+                        payload={"speed": slowmo["speed"]},
+                    )
+                )
             flash = goal["flash"]
             if flash.get("enabled", True):
                 dur = (flash["fade_in_ms"] + flash["hold_ms"] + flash["fade_out_ms"]) / 1000.0
