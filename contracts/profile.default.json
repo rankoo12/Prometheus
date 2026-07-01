@@ -63,6 +63,7 @@
     "language": "en",
     "words_per_chunk": 4,
     "font_file": "fonts/CapCutStyle.ttf",
+    "size": 72,
     "base_color": "#FFFFFF",
     "active_color": "#FFD400",
     "outline_color": "#000000",
