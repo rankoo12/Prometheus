@@ -92,11 +92,23 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   `remap_time`, since slowing a span shifts all later timestamps), burns them, and forces CFR
   (the slowed span is VFR). See spec §7.2. **Phase 3 complete** (detection + scorer + flash/GOAL!
   + slowmo, all validated).
-- **Phase 4 — captions.** Complete & validated. `CaptionSource` runs **faster-whisper** (`base.en`,
-  CPU int8; `detection/caption_config.py`) → `CAPTION_WORD` events (word-level timings).
-  `CaptionHandler` groups words into lines of `words_per_chunk`, **breaking on pauses > 1s** so a
-  line never spans a silence. `ass_builder` renders a lower-third **`\k` karaoke** line (each word
-  flips `base_color`→`active_color` as spoken; Primary=active/Secondary=base) with optional pop-in.
-  Tool: `render_captions`. Validated end-to-end (word-by-word highlight, e.g. "**Nice** shot" on the
-  goal). `faster-whisper` added to requirements; `captions.size` added to the Profile. See spec
-  §6.3/§7.3. GPU (CUDA) decode/transcribe is a later perf option.
+- **Phase 4 — captions.** Complete & validated. `CaptionSource` runs **faster-whisper** (`small.en`,
+  CPU int8; `detection/caption_config.py`) → `CAPTION_WORD` events (word-level timings). `small.en`
+  transcribes more *completely* than medium.en on this footage (bigger ≠ better for word coverage);
+  wrong words are hand-edited in the Phase 6 review UI. `CaptionHandler` groups words into lines of
+  `words_per_chunk`, **breaking on pauses > 1s** and **clamping each line's end at the next's start**
+  (no overlap). `ass_builder` renders a lower-third line where **only the currently-spoken word** is
+  `active_color` (previous revert to `base_color`) — one Dialogue per word — with optional pop-in.
+  Tool: `render_captions`. `faster-whisper` added to requirements; `captions.size` added to the
+  Profile. See spec §6.3/§7.3. GPU (CUDA) transcribe is a later perf option.
+- **Phase 5 — full export + music.** Complete & validated. `pipeline.py` is the composition root:
+  `detect_events` runs every enabled Source (boost, goal+scorer, captions), `build_instructions`
+  runs every Handler, `export()` renders the whole clip in **one pass** (all overlays + slow-mo).
+  Tool: `render_all`. **Slow-mo × captions** fixed — `remap_overlays` stretches caption word times
+  through slow-mo (a caption tracks the slowed voice). **Music:** `Renderer.render()` mixes a looped
+  track UNDER the voice — the **voice** is loudnorm'd to `audio.normalize_lufs`, music sits
+  `music.gain_db` below it (sidechain-ducked when `duck_under_voice`), final `alimiter`, 48kHz. (Key
+  fix: normalizing the *mix* re-boosted the music, so the gain knob seemed dead — normalize the voice
+  instead.) Output is 60fps CFR. Validated on multiple clips with the user's real tracks. **Deferred
+  to Phase 6:** music/voice **volume sliders** (tuning by re-render is too slow), in-app **trim**,
+  **thumbnail/badge**, yt-dlp fetch. See spec §7.2/§8/§10.
