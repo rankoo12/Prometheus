@@ -11,9 +11,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class CaptionConfig:
-    # small.en is markedly more accurate than base.en on fast/slangy speech (e.g. "ima fake that")
-    # at a modest speed cost; still fine on CPU for short clips. medium.en is the next step up.
-    model_size: str = "small.en"    # Whisper model; *.en = English-only
+    # medium.en for best transcription accuracy on fast/slangy gameplay chatter (larger download,
+    # slower on CPU — a good fit for GPU/CUDA later; occasional wrong words are hand-edited in the
+    # Phase 6 review UI). small.en/base.en are lighter fallbacks.
+    model_size: str = "medium.en"   # Whisper model; *.en = English-only
     device: str = "cpu"             # "cuda" to use the GPU (needs CUDA libs)
     compute_type: str = "int8"      # int8 on CPU; "float16" on CUDA
     beam_size: int = 5
