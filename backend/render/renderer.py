@@ -86,8 +86,10 @@ def render(clip_path: str, instructions: list[EditInstruction], width: int, heig
     clip_abs, out_abs = os.path.abspath(clip_path), os.path.abspath(out_path)
     has_audio = _has_audio(clip_abs)
     use_music = bool(music_path) and has_audio          # music mix needs the voice track
+    # the audio needs the filtergraph whenever we mix music OR loudness-normalize
+    need_audio_filter = has_audio and (use_music or norm_lufs is not None)
 
-    if not segments and not use_music:                  # fast path: just burn overlays, copy audio
+    if not segments and not need_audio_filter:          # fast path: just burn overlays, copy audio
         return burn_overlay(clip_path, build_ass(overlays, width, height, font), out_path, crf)
 
     ass = build_ass(remap_overlays(overlays, segments), width, height, font)
