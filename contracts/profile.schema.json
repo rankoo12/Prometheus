@@ -160,12 +160,13 @@
     "captions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "language", "words_per_chunk", "font_file", "base_color", "active_color", "outline_color", "outline_width", "position", "animation"],
+      "required": ["enabled", "language", "words_per_chunk", "font_file", "size", "base_color", "active_color", "outline_color", "outline_width", "position", "animation"],
       "properties": {
         "enabled": { "type": "boolean" },
         "language": { "type": "string" },
         "words_per_chunk": { "type": "integer", "minimum": 1 },
         "font_file": { "type": "string" },
+        "size": { "type": "number", "minimum": 1 },
         "base_color": { "$ref": "#/$defs/hexColor" },
         "active_color": { "$ref": "#/$defs/hexColor" },
         "outline_color": { "$ref": "#/$defs/hexColor" },

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.handlers.boost_handler import BoostHandler
+from backend.handlers.caption_handler import CaptionHandler
 from backend.handlers.goal_handler import GoalHandler
 from backend.models.event import Event, EventType
 from backend.models.instruction import EditInstruction, InstructionKind
@@ -51,3 +52,15 @@ def test_goal_flash_draws_full_frame_box():
     assert "GOAL!" in ass                            # the text pop
     assert "\\p1}" in ass and "l 1080 0 1080 1920" in ass   # the flash box drawing spans the frame
     assert "Dialogue: 0," in ass and "Dialogue: 1," in ass  # flash under (L0), text over (L1)
+
+
+def test_caption_karaoke_line():
+    prof = Profile.load()
+    prof.data["captions"]["words_per_chunk"] = 4
+    words = [
+        Event(EventType.CAPTION_WORD, t_start=25.0, t_end=25.3, metadata={"word": "Nice"}),
+        Event(EventType.CAPTION_WORD, t_start=25.3, t_end=25.8, metadata={"word": "shot"}),
+    ]
+    ass = build_ass(CaptionHandler().handle(words, prof), 1080, 1920)
+    assert "\\k30}Nice" in ass and "\\k50}shot" in ass       # per-word karaoke timings
+    assert "\\2c" in ass                                      # secondary (base) colour set for \k

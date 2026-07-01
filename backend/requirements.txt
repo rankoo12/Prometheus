@@ -1,3 +1,4 @@
 jsonschema>=4.18
 numpy>=1.26
 opencv-python>=4.9
+faster-whisper>=1.0    # caption word-timing (Phase 4); CPU int8 by default, CUDA optional

@@ -92,18 +92,39 @@ def _flash_event(p: dict, w: int, h: int) -> str:
     return f"{tags}m 0 0 l {w} 0 {w} {h} 0 {h}{{\\p0}}"
 
 
+def _caption_event(p: dict) -> str:
+    """A lower-third karaoke line: each word highlights base->active as spoken (ASS \\k), with an
+    optional pop-in. Primary colour = active (sung), Secondary = base (not yet sung)."""
+    x, y = int(p["x"]), int(p["y"])
+    size = int(p.get("size", 72))
+    active = _ass_color(p.get("active_color", "#FFD400"))
+    base = _ass_color(p.get("base_color", "#FFFFFF"))
+    outline = _ass_color(p.get("outline_color", "#000000"))
+    bord = p.get("outline_width", 4)
+    tags = f"{{\\an2\\pos({x},{y})\\fs{size}\\1c{active}\\2c{base}\\3c{outline}\\bord{bord}"
+    if p.get("pop_in"):
+        pop = int(p.get("pop_duration_ms", 120))
+        tags += f"\\fscx70\\fscy70\\t(0,{pop},\\fscx100\\fscy100)"
+    tags += "\\fad(60,120)}"
+    karaoke = "".join(f"{{\\k{w['kdur']}}}{w['text']} " for w in p.get("words", [])).strip()
+    return tags + karaoke
+
+
 def build_ass(instructions: list[EditInstruction], width: int, height: int, font: str = "Arial") -> str:
     """Render ASS_OVERLAY instructions into a full .ass document. Each payload carries its own
-    style; a payload `type` of "flash" draws a full-frame box (Layer 0, under text on Layer 1)."""
+    style; a payload `type` of "flash" draws a full-frame box (Layer 0), "caption" a karaoke
+    line (Layer 1); anything else is a styled text pop (Layer 1)."""
     overlays = [i for i in instructions if i.kind is InstructionKind.ASS_OVERLAY]
     out = [_HEADER.format(w=width, h=height, font=font)]
     for inst in overlays:
         p = inst.payload
         end = inst.t_end if inst.t_end is not None else inst.t_start
         start_t, end_t = _ass_time(inst.t_start), _ass_time(end)
-        if p.get("type") == "flash":
-            body = _flash_event(p, width, height)
-            out.append(f"Dialogue: 0,{start_t},{end_t},Default,,0,0,0,,{body}")
+        kind = p.get("type")
+        if kind == "flash":
+            out.append(f"Dialogue: 0,{start_t},{end_t},Default,,0,0,0,,{_flash_event(p, width, height)}")
+        elif kind == "caption":
+            out.append(f"Dialogue: 1,{start_t},{end_t},Default,,0,0,0,,{_caption_event(p)}")
         else:
             body = _text_tags(p) + str(p["text"]).replace("\n", "\\N")
             out.append(f"Dialogue: 1,{start_t},{end_t},Default,,0,0,0,,{body}")

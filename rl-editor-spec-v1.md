@@ -309,7 +309,11 @@ digit bank + name template grow with footage (scores ≥5; multi-user name input
 
 ### 6.3 Caption word-timing
 
-**Method:** Whisper with word-level timestamps (`whisper-timestamped` or `faster-whisper`). English. Produces per-word `(word, t_start, t_end)`. This is the `CaptionSource`. Reliable; main cost is the model download + compute (GPU fast, CPU slower).
+**Method (implemented):** `CaptionSource` runs **faster-whisper** (`base.en`, CPU int8 default;
+CUDA optional) with `word_timestamps=True`, emitting one `CAPTION_WORD` event per word
+`(word, t_start, t_end)`. Validated on real clips — clear speech, accurate word timings (e.g.
+"Nice shot." landed on the goal). Config in `detection/caption_config.py`; language from the
+Profile. Main cost is the one-time model download + compute (GPU faster).
 
 ---
 
@@ -335,9 +339,14 @@ also emits a `RETIME_SEGMENT` slowing a span around the goal (`goal.slowmo`: `sp
 every overlay onto the output timeline** (`render/retime.py` — pure `remap_time`; the slowed
 span shifts all later timestamps), burns them, and forces CFR output (the slowed span is VFR).
 
-### 7.3 Captions (ASS karaoke)
+### 7.3 Captions (ASS karaoke) — implemented
 
-`CaptionHandler` consumes `CAPTION_WORD` events, groups into chunks of `words_per_chunk`, emits an ASS file where each word's color flips from `base_color` to `active_color` at its spoken timestamp (karaoke highlight), with optional pop-in. Burned in by the renderer in the same FFmpeg pass.
+`CaptionHandler` groups `CAPTION_WORD` events into lines of `words_per_chunk`, **breaking early on
+a pause > 1s** so a line never spans a silence (else it lingers for seconds). Each line is one
+ASS_OVERLAY (payload `type:"caption"`) carrying per-word karaoke durations; `ass_builder` renders
+a lower-third line where each word flips `base_color`→`active_color` as it's spoken (ASS `\k`,
+Primary=active/Secondary=base), with optional pop-in. Burned by the Renderer. Validated
+(word-by-word highlight, e.g. "**Nice** shot"). Tool: `render_captions`.
 
 ### 7.4 SFX & music
 
@@ -459,9 +468,11 @@ Ordering is deliberate: **the project's real risk is boost detection, so it goes
 - **Status: ✅ complete (2026-07-01) — detection + scorer + flash/"GOAL!" + slowmo, all validated.**
 
 ### Phase 4 — Captions
-- `CaptionSource` (Whisper word-timing).
-- `CaptionHandler` + `ass_builder` karaoke highlight + pop-in.
-- **Exit:** burned-in karaoke captions matching profile style.
+- `CaptionSource` (faster-whisper word-timing) → `CAPTION_WORD` events (§6.3).
+- `CaptionHandler` (gap-aware chunking) + `ass_builder` `\k` karaoke highlight + pop-in (§7.3).
+- **Exit:** burned-in karaoke captions matching profile style. **Met** — validated end-to-end
+  (word-by-word highlight, lower third). Tool: `render_captions`.
+- **Status: ✅ complete (2026-07-01), validated.**
 
 ### Phase 5 — Trim, music, thumbnail, export
 - In-app trim (probe + in/out points → trimmed input to pipeline).

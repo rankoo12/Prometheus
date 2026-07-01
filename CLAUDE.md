@@ -92,3 +92,11 @@ Frontend (from `frontend/`): `npm install`, then `npm run build`, then `npm star
   `remap_time`, since slowing a span shifts all later timestamps), burns them, and forces CFR
   (the slowed span is VFR). See spec §7.2. **Phase 3 complete** (detection + scorer + flash/GOAL!
   + slowmo, all validated).
+- **Phase 4 — captions.** Complete & validated. `CaptionSource` runs **faster-whisper** (`base.en`,
+  CPU int8; `detection/caption_config.py`) → `CAPTION_WORD` events (word-level timings).
+  `CaptionHandler` groups words into lines of `words_per_chunk`, **breaking on pauses > 1s** so a
+  line never spans a silence. `ass_builder` renders a lower-third **`\k` karaoke** line (each word
+  flips `base_color`→`active_color` as spoken; Primary=active/Secondary=base) with optional pop-in.
+  Tool: `render_captions`. Validated end-to-end (word-by-word highlight, e.g. "**Nice** shot" on the
+  goal). `faster-whisper` added to requirements; `captions.size` added to the Profile. See spec
+  §6.3/§7.3. GPU (CUDA) decode/transcribe is a later perf option.
