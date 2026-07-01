@@ -132,7 +132,7 @@ def build_filter(segments: list[Segment], ass_name: str, has_audio: bool = True,
     if not has_audio:
         return ";".join(chains)
 
-    # ---- AUDIO: voice (retimed to match the video) ----
+    # ---- AUDIO: voice (retimed to match the video), then loudness-NORMALIZE THE VOICE ----
     if segments:
         pieces = _pieces(segments)
         alabels = []
@@ -141,15 +141,21 @@ def build_filter(segments: list[Segment], ass_name: str, has_audio: bool = True,
             apts = "asetpts=PTS-STARTPTS" + ("" if sp == 1.0 else f",{_atempo_chain(sp)}")
             chains.append(f"[0:a]atrim={atrim},{apts}[a{idx}]")
             alabels.append(f"[a{idx}]")
-        chains.append(f"{''.join(alabels)}concat=n={len(pieces)}:v=0:a=1[voice]")
+        chains.append(f"{''.join(alabels)}concat=n={len(pieces)}:v=0:a=1[voiceraw]")
     else:
-        chains.append("[0:a]asetpts=PTS-STARTPTS[voice]")
+        chains.append("[0:a]asetpts=PTS-STARTPTS[voiceraw]")
+    # Normalize the VOICE (not the final mix). Normalizing a music-heavy mix would re-boost the
+    # music and drown the voice — the reason a low music gain seemed to have no effect.
+    if norm_lufs is not None:
+        chains.append(f"[voiceraw]loudnorm=I={norm_lufs:g}:TP={true_peak:g}[voice]")
+    else:
+        chains.append("[voiceraw]anull[voice]")
 
-    # ---- MUSIC bed (input [1:a], looped by the caller) ----
+    # ---- MUSIC a controlled amount UNDER the normalized voice (input [1:a], looped by caller) ----
     final = "[voice]"
     if music:
         chains.append(f"[1:a]volume={music_gain_db:g}dB[music]")
-        if duck:                                          # music ducks when the voice is present
+        if duck:                                          # music ducks further when the voice is present
             chains.append("[voice]asplit=2[vA][vB]")
             chains.append("[music][vB]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[mduck]")
             chains.append("[vA][mduck]amix=inputs=2:duration=first:normalize=0[amix]")
@@ -157,9 +163,5 @@ def build_filter(segments: list[Segment], ass_name: str, has_audio: bool = True,
             chains.append("[voice][music]amix=inputs=2:duration=first:normalize=0[amix]")
         final = "[amix]"
 
-    # ---- loudness normalize ----
-    if norm_lufs is not None:
-        chains.append(f"{final}loudnorm=I={norm_lufs:g}:TP={true_peak:g}[aout]")
-    else:
-        chains.append(f"{final}anull[aout]")
+    chains.append(f"{final}alimiter=limit=0.97[aout]")     # catch summed peaks; no re-normalize
     return ";".join(chains)
